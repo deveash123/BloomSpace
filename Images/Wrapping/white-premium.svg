@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-label="White premium wrapping paper">
+  <rect width="400" height="400" fill="#FFF9F2"/>
+  <circle cx="200" cy="190" r="156" fill="#F8E7E9" opacity=".7"/>
+  <ellipse cx="200" cy="356" rx="100" ry="12" fill="#E7CFC8" opacity=".55"/>
+
+  <path d="M108 108 L292 108 L256 326 C 252 348 228 360 200 360 C 172 360 148 348 144 326 Z" fill="#FFFDF8" stroke="#E9DED7" stroke-width="2"/>
+  <path d="M108 108 L200 108 L186 358 C 176 359 166 358 160 354 Z" fill="#F8F1E9" opacity=".9"/>
+  <path d="M292 108 L200 108 L214 358 C 224 359 234 358 240 354 Z" fill="#F1E7DD" opacity=".8"/>
+  <path d="M108 108 L292 108 L286 132 L114 132 Z" fill="#F1E7DD"/>
+
+  <g fill="#D998A8" opacity=".55">
+    <circle cx="156" cy="184" r="3.5"/><circle cx="176" cy="214" r="2.5"/><circle cx="146" cy="240" r="2.5"/>
+    <circle cx="244" cy="192" r="3"/><circle cx="230" cy="246" r="2.5"/><circle cx="252" cy="278" r="2"/>
+    <circle cx="190" cy="308" r="2.5"/><circle cx="212" cy="286" r="2"/>
+  </g>
+  <path d="M150 320 C 160 300 170 280 178 260" fill="none" stroke="#E9DED7" stroke-width="2" opacity=".8"/>
+  <path d="M250 320 C 240 300 230 280 222 260" fill="none" stroke="#E9DED7" stroke-width="2" opacity=".8"/>
+
+  <g>
+    <path d="M200 120 C 168 90 136 100 140 128 C 144 152 180 148 200 132Z" fill="#C77F91"/>
+    <path d="M200 120 C 232 90 264 100 260 128 C 256 152 220 148 200 132Z" fill="#D998A8"/>
+    <circle cx="200" cy="126" r="11" fill="#A8434F"/>
+    <path d="M192 136 C 184 164 176 186 170 208" fill="none" stroke="#C77F91" stroke-width="8" stroke-linecap="round"/>
+    <path d="M208 136 C 216 162 224 184 230 204" fill="none" stroke="#C77F91" stroke-width="8" stroke-linecap="round"/>
+  </g>
+
+  <path d="M74 64 C 130 48 180 54 220 66" fill="none" stroke="#C77F91" stroke-width="2" opacity=".28"/>
+</svg>

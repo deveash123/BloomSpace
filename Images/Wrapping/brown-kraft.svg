@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-label="Brown kraft wrapping paper">
+  <rect width="400" height="400" fill="#FFF9F2"/>
+  <circle cx="200" cy="190" r="156" fill="#F8E7E9" opacity=".65"/>
+  <ellipse cx="200" cy="356" rx="100" ry="12" fill="#E7CFC8" opacity=".55"/>
+
+  <path d="M108 108 L292 108 L256 326 C 252 348 228 360 200 360 C 172 360 148 348 144 326 Z" fill="#C8A27E"/>
+  <path d="M108 108 L200 108 L186 358 C 176 359 166 358 160 354 Z" fill="#D8B492" opacity=".85"/>
+  <path d="M292 108 L200 108 L214 358 C 224 359 234 358 240 354 Z" fill="#B08968" opacity=".7"/>
+  <path d="M108 108 L292 108 L286 132 L114 132 Z" fill="#B08968" opacity=".8"/>
+
+  <g stroke="#A57C5B" stroke-width="1.5" opacity=".5">
+    <path d="M140 170 C 165 176 190 174 214 166" fill="none"/>
+    <path d="M132 208 C 160 216 188 214 218 204" fill="none"/>
+    <path d="M150 252 C 172 258 196 256 220 248" fill="none"/>
+    <path d="M162 296 C 180 300 200 298 216 292" fill="none"/>
+  </g>
+
+  <g>
+    <path d="M200 120 C 168 90 136 100 140 128 C 144 152 180 148 200 132Z" fill="#8A6A4F"/>
+    <path d="M200 120 C 232 90 264 100 260 128 C 256 152 220 148 200 132Z" fill="#A57C5B"/>
+    <circle cx="200" cy="126" r="11" fill="#6E5440"/>
+    <path d="M192 136 C 182 162 174 184 168 206" fill="none" stroke="#8A6A4F" stroke-width="7" stroke-linecap="round"/>
+    <path d="M208 136 C 218 160 226 182 232 202" fill="none" stroke="#8A6A4F" stroke-width="7" stroke-linecap="round"/>
+  </g>
+
+  <g>
+    <path d="M118 258 C 110 232 120 208 140 196 C 152 216 150 242 134 260Z" fill="#A8B89A"/>
+    <path d="M126 260 C 124 278 124 294 128 310" fill="none" stroke="#7E9470" stroke-width="4" stroke-linecap="round"/>
+  </g>
+
+  <path d="M74 64 C 130 48 180 54 220 66" fill="none" stroke="#C77F91" stroke-width="2" opacity=".28"/>
+</svg>

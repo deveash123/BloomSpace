@@ -1,0 +1,13 @@
+## Visual Studio & ASP.NET Web Forms
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## Logs
+App_Data/Logs/*.log
+
+## Build results
+[Bb]in/
+[Oo]bj/

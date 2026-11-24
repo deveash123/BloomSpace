@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 720" role="img" aria-label="Ivory Casablanca lilies">
+  <defs>
+    <g id="lilyPetal">
+      <path d="M0 0 C -16 -56 -14 -126 0 -184 C 14 -126 16 -56 0 0Z" fill="#FFFDF8"/>
+      <path d="M0 0 C -7 -50 -6 -116 0 -168 C 6 -116 7 -50 0 0Z" fill="#F4E3E2" opacity=".7"/>
+    </g>
+    <g id="lilyBloom">
+      <use href="#lilyPetal"/>
+      <use href="#lilyPetal" transform="rotate(60)"/>
+      <use href="#lilyPetal" transform="rotate(120)"/>
+      <use href="#lilyPetal" transform="rotate(180)"/>
+      <use href="#lilyPetal" transform="rotate(240)"/>
+      <use href="#lilyPetal" transform="rotate(300)"/>
+      <circle r="13" fill="#D9A441"/>
+      <g stroke="#A8B89A" stroke-width="3" stroke-linecap="round" fill="none">
+        <path d="M0 0 C -8 -30 -16 -54 -26 -76"/>
+        <path d="M0 0 C 6 -32 12 -58 20 -80"/>
+        <path d="M0 0 C 18 -26 34 -44 48 -60"/>
+      </g>
+      <g fill="#594B49">
+        <ellipse cx="-27" cy="-78" rx="7" ry="11" transform="rotate(-24 -27 -78)"/>
+        <ellipse cx="21" cy="-82" rx="7" ry="11" transform="rotate(14 21 -82)"/>
+        <ellipse cx="49" cy="-62" rx="7" ry="11" transform="rotate(48 49 -62)"/>
+      </g>
+    </g>
+    <g id="lilyLeaf">
+      <path d="M0 0 C 18 -52 54 -98 102 -128 C 94 -74 62 -22 12 8Z" fill="#A8B89A"/>
+      <path d="M8 2 C 38 -40 70 -80 98 -116" fill="none" stroke="#7E9470" stroke-width="3"/>
+    </g>
+  </defs>
+
+  <rect width="600" height="720" fill="#F8E7E9"/>
+  <circle cx="300" cy="280" r="232" fill="#FFF9F2" opacity=".68"/>
+  <path d="M0 600 C 130 566 230 610 330 592 C 440 572 520 614 600 586 L600 720 L0 720Z" fill="#F1D8DC"/>
+
+  <g fill="none" stroke="#7E9470" stroke-width="7" stroke-linecap="round">
+    <path d="M300 300 C 296 420 300 560 292 700"/>
+    <path d="M182 404 C 182 520 190 610 184 700"/>
+    <path d="M418 386 C 428 500 438 606 446 700"/>
+  </g>
+
+  <use href="#lilyLeaf" transform="translate(290 540) rotate(-26) scale(.95)"/>
+  <use href="#lilyLeaf" transform="translate(310 600) rotate(152) scale(.9)"/>
+  <use href="#lilyLeaf" transform="translate(190 530) rotate(-158) scale(.8)"/>
+  <use href="#lilyLeaf" transform="translate(424 550) rotate(12) scale(.85)"/>
+
+  <use href="#lilyBloom" transform="translate(300 300)"/>
+  <use href="#lilyBloom" transform="translate(182 402) scale(.68) rotate(-8)"/>
+  <use href="#lilyBloom" transform="translate(418 384) scale(.74) rotate(7)"/>
+
+  <g>
+    <path d="M126 456 C 118 486 128 518 150 536" fill="none" stroke="#7E9470" stroke-width="5" stroke-linecap="round"/>
+    <path d="M150 536 C 132 508 126 478 136 452 C 158 466 166 494 158 518 C 156 528 152 534 150 536Z" fill="#C77F91" opacity=".8"/>
+  </g>
+
+  <path d="M70 636 C 160 610 250 638 342 620 C 430 602 500 628 546 612" fill="none" stroke="#C77F91" stroke-width="2" opacity=".3"/>
+</svg>
