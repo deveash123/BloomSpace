@@ -1,76 +1,112 @@
 using System;
-using System.Web.UI;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Text;
+using System.Web;
+using BloomSpace;
 
-namespace BloomSpace.Pages
+public partial class Pages_OrderConfirmation : System.Web.UI.Page
 {
-    public partial class OrderConfirmationPage : BloomPage
+    protected void Page_Load(object sender, EventArgs e)
     {
-        protected void Page_Load(object sender, EventArgs e)
+        AuthHelper.RequireLogin(this);
+        if (IsPostBack) return;
+
+        int orderId;
+        if (!int.TryParse(Request.QueryString["id"], out orderId))
         {
-            if (!Auth.RequireLogin(this))
-            {
-                return;
-            }
-
-            if (IsPostBack)
-            {
-                return;
-            }
-
-            int orderId;
-
-            if (!int.TryParse(Request.QueryString["orderId"], out orderId) || orderId <= 0)
-            {
-                ShowMissing();
-                return;
-            }
-
-            try
-            {
-                OrderView order = OrderService.GetOrder(orderId, Auth.CurrentUserId.Value);
-
-                if (order == null)
-                {
-                    ShowMissing();
-                    return;
-                }
-
-                pnlOrder.Visible = true;
-                pnlMissing.Visible = false;
-
-                litFirstName.Text = Server.HtmlEncode(Auth.FirstName);
-                litOrderNumber.Text = order.OrderId.ToString("D5");
-                litOrderDate.Text = Server.HtmlEncode(order.OrderDateText);
-                litDeliveryDate.Text = Server.HtmlEncode(order.DeliveryDateText);
-                litStatus.Text = Server.HtmlEncode(order.Status);
-
-                rptItems.DataSource = order.Lines;
-                rptItems.DataBind();
-
-                litSubtotal.Text = order.SubtotalText;
-                litDelivery.Text = order.DeliveryFeeText;
-                litGrandTotal.Text = order.GrandTotalText;
-
-                litCustomerName.Text = Server.HtmlEncode(order.CustomerName);
-
-                string address = Server.HtmlEncode(order.DeliveryAddress ?? string.Empty);
-                litAddress.Text = address
-                    .Replace("\r\n", "<br />")
-                    .Replace("\n", "<br />");
-
-                litPhone.Text = Server.HtmlEncode(order.Phone);
-            }
-            catch (Exception exception)
-            {
-                Logger.Log(exception);
-                ShowMissing();
-            }
+            ShowNotFound();
+            return;
         }
 
-        private void ShowMissing()
+        OrderInfo order;
+        try
         {
-            pnlOrder.Visible = false;
-            pnlMissing.Visible = true;
+            // The query filters by UserId too, so nobody can open another customer's order by changing the number.
+            order = OrderService.GetOrder(orderId, AuthHelper.CurrentUserId);
         }
+        catch (Exception ex)
+        {
+            ErrorLog.Write(ex);
+            ShowNotFound();
+            return;
+        }
+
+        if (order == null)
+        {
+            ShowNotFound();
+            return;
+        }
+
+        litOrderId.Text = order.OrderId.ToString();
+        litStatus.Text = Enc(order.Status);
+        litName.Text = Enc(order.CustomerName);
+        litPhone.Text = Enc(order.Phone);
+        litAddress.Text = Enc(order.DeliveryAddress).Replace("\n", "<br />");
+        litDate.Text = order.DeliveryDate.ToString("dddd, d MMMM yyyy", CultureInfo.InvariantCulture);
+        litSubtotal.Text = Enc(Money.Rupees(order.Subtotal));
+        litFee.Text = Enc(Money.Rupees(order.DeliveryFee));
+        litTotal.Text = Enc(Money.Rupees(order.TotalAmount));
+        litLines.Text = BuildLines(order);
     }
+
+    /// <summary>Builds the order summary, grouping custom-bouquet rows together.</summary>
+    private static string BuildLines(OrderInfo order)
+    {
+        StringBuilder sb = new StringBuilder();
+
+        // Single stems first
+        bool anySingles = false;
+        foreach (OrderLine l in order.Lines)
+        {
+            if (l.BouquetNo.HasValue) continue;
+            if (!anySingles)
+            {
+                sb.Append("<div class=\"order-group\"><h4>Individual Flowers</h4>");
+                anySingles = true;
+            }
+            sb.Append(Row(l.Quantity + " × " + l.FlowerName, l.LineTotal, false));
+        }
+        if (anySingles) sb.Append("</div>");
+
+        // Then each bouquet
+        SortedDictionary<int, List<OrderLine>> bouquets = new SortedDictionary<int, List<OrderLine>>();
+        foreach (OrderLine l in order.Lines)
+        {
+            if (!l.BouquetNo.HasValue) continue;
+            if (!bouquets.ContainsKey(l.BouquetNo.Value)) bouquets[l.BouquetNo.Value] = new List<OrderLine>();
+            bouquets[l.BouquetNo.Value].Add(l);
+        }
+        foreach (KeyValuePair<int, List<OrderLine>> b in bouquets)
+        {
+            sb.Append("<div class=\"order-group\"><h4>Custom Bouquet ").Append(b.Key).Append("</h4>");
+            decimal wrap = 0m, ribbon = 0m;
+            string wrapName = "", ribbonName = "";
+            foreach (OrderLine l in b.Value)
+            {
+                sb.Append(Row(l.Quantity + " × " + l.FlowerName, l.UnitPrice * l.Quantity, false));
+                wrap += l.WrappingPrice;
+                ribbon += l.RibbonPrice;
+                if (l.WrappingName.Length > 0) wrapName = l.WrappingName;
+                if (l.RibbonName.Length > 0) ribbonName = l.RibbonName;
+            }
+            sb.Append(Row(wrapName + " (wrapping)", wrap, true));
+            sb.Append(Row(ribbonName + " (ribbon)", ribbon, true));
+            sb.Append("</div>");
+        }
+        return sb.ToString();
+    }
+
+    private static string Row(string label, decimal amount, bool sub)
+    {
+        return "<div class=\"order-row" + (sub ? " sub" : "") + "\"><span>" + Enc(label) + "</span><span>" + Enc(Money.Rupees(amount)) + "</span></div>";
+    }
+
+    private void ShowNotFound()
+    {
+        pnlOrder.Visible = false;
+        pnlNotFound.Visible = true;
+    }
+
+    private static string Enc(string s) { return HttpUtility.HtmlEncode(s); }
 }

@@ -1,630 +1,342 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Linq;
-using System.Web.Script.Serialization;
+using System.Data.SqlClient;
 
 namespace BloomSpace
 {
+    /// <summary>One flower row in the cart (prices come live from the Flowers table).</summary>
+    public class CartItem
+    {
+        public int CartId { get; set; }
+        public int FlowerId { get; set; }
+        public string FlowerName { get; set; }
+        public string ImageUrl { get; set; }
+        public decimal UnitPrice { get; set; }
+        public int Quantity { get; set; }
+        public decimal LineTotal { get { return UnitPrice * Quantity; } }
+    }
+
     /// <summary>
-    /// All shopping-bag operations. Every method that touches a cart line
-    /// filters by UserId, so a customer can never read or change another
-    /// customer's bag by guessing an id.
+    /// Either the "Individual Flowers" group (single stems) or one custom bouquet.
+    /// Wrapping and ribbon are charged once per bouquet.
     /// </summary>
+    public class CartGroup
+    {
+        public CartGroup() { Items = new List<CartItem>(); }
+
+        public bool IsBouquet { get; set; }
+        public Guid BouquetId { get; set; }
+        public List<CartItem> Items { get; private set; }
+
+        public int WrappingId { get; set; }
+        public string WrappingName { get; set; }
+        public decimal WrappingPrice { get; set; }
+        public int RibbonId { get; set; }
+        public string RibbonName { get; set; }
+        public decimal RibbonPrice { get; set; }
+
+        public decimal FlowerTotal
+        {
+            get
+            {
+                decimal sum = 0m;
+                foreach (CartItem i in Items) sum += i.LineTotal;
+                return sum;
+            }
+        }
+
+        /// <summary>Flower Cost + Wrapping + Ribbon (wrapping/ribbon only exist on bouquets).</summary>
+        public decimal GroupTotal
+        {
+            get { return FlowerTotal + (IsBouquet ? WrappingPrice + RibbonPrice : 0m); }
+        }
+    }
+
+    public class CartSummary
+    {
+        public CartSummary() { Groups = new List<CartGroup>(); }
+
+        public List<CartGroup> Groups { get; private set; }
+        public decimal Subtotal { get; set; }
+        public decimal DeliveryFee { get; set; }
+        public decimal Total { get; set; }
+        public bool IsEmpty { get { return Groups.Count == 0; } }
+    }
+
+    /// <summary>All cart database work. Every method filters by UserId, so users can only touch their own cart.</summary>
     public static class CartService
     {
-        private static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
+        public const int MaxQty = 50;
 
-        /* ----------------------------- CATALOGUE ----------------------------- */
+        // ---------------------------------------------------------------- reading
 
-        public static List<FlowerProduct> GetShopFlowers(string category)
+        public static CartSummary Load(int userId)
         {
-            string sql =
-                @"SELECT FlowerId, Name, Category, Description, Price, PricePerStem, ImagePath, Badge
-                  FROM dbo.Flowers
-                  WHERE IsActive = 1 AND ShowInShop = 1";
-
-            DataTable table;
-
-            if (string.IsNullOrWhiteSpace(category))
+            using (SqlConnection con = Db.Open())
             {
-                sql += " ORDER BY CASE WHEN Badge IS NOT NULL THEN 0 ELSE 1 END, FlowerId";
-                table = Db.GetDataTable(sql);
+                return Load(con, null, userId);
             }
-            else
-            {
-                sql += " AND Category = @Category ORDER BY FlowerId";
-                table = Db.GetDataTable(sql, Db.P("@Category", category.Trim()));
-            }
-
-            return MapProducts(table);
-        }
-
-        public static List<FlowerProduct> GetFeaturedFlowers(int count)
-        {
-            if (count < 1) count = 4;
-            if (count > 8) count = 8;
-
-            DataTable table = Db.GetDataTable(
-                @"SELECT TOP (@Count) FlowerId, Name, Category, Description, Price, PricePerStem, ImagePath, Badge
-                  FROM dbo.Flowers
-                  WHERE IsActive = 1 AND ShowInShop = 1
-                  ORDER BY CASE WHEN Badge IS NOT NULL THEN 0 ELSE 1 END, FlowerId",
-                Db.P("@Count", count));
-
-            return MapProducts(table);
-        }
-
-        public static List<FlowerOption> GetBuilderFlowers()
-        {
-            DataTable table = Db.GetDataTable(
-                @"SELECT FlowerId, Name, Category, Description, PricePerStem, ImagePath
-                  FROM dbo.Flowers
-                  WHERE IsActive = 1 AND ShowInBuilder = 1
-                  ORDER BY FlowerId");
-
-            List<FlowerOption> list = new List<FlowerOption>();
-
-            foreach (DataRow row in table.Rows)
-            {
-                list.Add(new FlowerOption
-                {
-                    FlowerId = Convert.ToInt32(row["FlowerId"]),
-                    Name = Convert.ToString(row["Name"]),
-                    Category = Convert.ToString(row["Category"]),
-                    Description = Convert.ToString(row["Description"]),
-                    PricePerStem = Convert.ToDecimal(row["PricePerStem"]),
-                    ImagePath = Convert.ToString(row["ImagePath"])
-                });
-            }
-
-            return list;
-        }
-
-        public static List<WrappingOption> GetWrappingOptions()
-        {
-            DataTable table = Db.GetDataTable(
-                @"SELECT WrappingId, Name, Description, Price, ImagePath
-                  FROM dbo.WrappingSheets
-                  WHERE IsActive = 1
-                  ORDER BY WrappingId");
-
-            List<WrappingOption> list = new List<WrappingOption>();
-
-            foreach (DataRow row in table.Rows)
-            {
-                list.Add(new WrappingOption
-                {
-                    WrappingId = Convert.ToInt32(row["WrappingId"]),
-                    Name = Convert.ToString(row["Name"]),
-                    Description = Convert.ToString(row["Description"]),
-                    Price = Convert.ToDecimal(row["Price"]),
-                    ImagePath = Convert.ToString(row["ImagePath"])
-                });
-            }
-
-            return list;
-        }
-
-        public static List<RibbonOption> GetRibbonOptions()
-        {
-            DataTable table = Db.GetDataTable(
-                @"SELECT RibbonId, Name, Description, Price, ColorHex
-                  FROM dbo.Ribbons
-                  WHERE IsActive = 1
-                  ORDER BY RibbonId");
-
-            List<RibbonOption> list = new List<RibbonOption>();
-
-            foreach (DataRow row in table.Rows)
-            {
-                list.Add(new RibbonOption
-                {
-                    RibbonId = Convert.ToInt32(row["RibbonId"]),
-                    Name = Convert.ToString(row["Name"]),
-                    Description = Convert.ToString(row["Description"]),
-                    Price = Convert.ToDecimal(row["Price"]),
-                    ColorHex = Convert.ToString(row["ColorHex"])
-                });
-            }
-
-            return list;
-        }
-
-        /* ------------------------------- CART -------------------------------- */
-
-        public static int GetCartCount(int userId)
-        {
-            if (userId <= 0)
-            {
-                return 0;
-            }
-
-            object result = Db.ExecuteScalar(
-                "SELECT ISNULL(SUM(Quantity), 0) FROM dbo.Cart WHERE UserId = @UserId",
-                Db.P("@UserId", userId));
-
-            return Convert.ToInt32(result);
-        }
-
-        public static void AddFlower(int userId, int flowerId, int quantity)
-        {
-            if (userId <= 0)
-            {
-                throw new InvalidOperationException("Please sign in to add flowers to your bag.");
-            }
-
-            if (quantity < 1 || quantity > 99)
-            {
-                throw new ArgumentException("Quantity must be between 1 and 99.");
-            }
-
-            DataTable flower = Db.GetDataTable(
-                "SELECT FlowerId FROM dbo.Flowers WHERE FlowerId = @FlowerId AND IsActive = 1 AND ShowInShop = 1",
-                Db.P("@FlowerId", flowerId));
-
-            if (flower.Rows.Count == 0)
-            {
-                throw new InvalidOperationException("This bouquet is no longer available.");
-            }
-
-            int updated = Db.ExecuteNonQuery(
-                @"UPDATE dbo.Cart
-                  SET Quantity = CASE WHEN Quantity + @Quantity > 99 THEN 99 ELSE Quantity + @Quantity END
-                  WHERE UserId = @UserId AND IsCustom = 0 AND FlowerId = @FlowerId",
-                Db.P("@Quantity", quantity),
-                Db.P("@UserId", userId),
-                Db.P("@FlowerId", flowerId));
-
-            if (updated == 0)
-            {
-                Db.ExecuteNonQuery(
-                    @"INSERT INTO dbo.Cart (UserId, FlowerId, Quantity, IsCustom)
-                      VALUES (@UserId, @FlowerId, @Quantity, 0)",
-                    Db.P("@UserId", userId),
-                    Db.P("@FlowerId", flowerId),
-                    Db.P("@Quantity", quantity));
-            }
-        }
-
-        public static void AddCustomBouquet(
-            int userId,
-            IList<CustomFlowerSelection> selections,
-            int wrappingId,
-            int ribbonId)
-        {
-            if (userId <= 0)
-            {
-                throw new InvalidOperationException("Please sign in to add your bouquet to the bag.");
-            }
-
-            List<CustomFlowerSelection> clean = NormalizeSelections(selections);
-
-            DataTable wrapping = Db.GetDataTable(
-                "SELECT WrappingId FROM dbo.WrappingSheets WHERE WrappingId = @Id AND IsActive = 1",
-                Db.P("@Id", wrappingId));
-
-            if (wrapping.Rows.Count == 0)
-            {
-                throw new ArgumentException("Please choose an available wrapping paper.");
-            }
-
-            DataTable ribbon = Db.GetDataTable(
-                "SELECT RibbonId FROM dbo.Ribbons WHERE RibbonId = @Id AND IsActive = 1",
-                Db.P("@Id", ribbonId));
-
-            if (ribbon.Rows.Count == 0)
-            {
-                throw new ArgumentException("Please choose an available ribbon.");
-            }
-
-            foreach (CustomFlowerSelection selection in clean)
-            {
-                DataTable flower = Db.GetDataTable(
-                    "SELECT FlowerId FROM dbo.Flowers WHERE FlowerId = @Id AND IsActive = 1 AND ShowInBuilder = 1",
-                    Db.P("@Id", selection.FlowerId));
-
-                if (flower.Rows.Count == 0)
-                {
-                    throw new InvalidOperationException("One of the selected flowers is no longer available.");
-                }
-            }
-
-            string customData = Json.Serialize(clean);
-
-            int updated = Db.ExecuteNonQuery(
-                @"UPDATE dbo.Cart
-                  SET Quantity = CASE WHEN Quantity >= 99 THEN 99 ELSE Quantity + 1 END
-                  WHERE UserId = @UserId
-                    AND IsCustom = 1
-                    AND WrappingId = @WrappingId
-                    AND RibbonId = @RibbonId
-                    AND CustomData = @CustomData",
-                Db.P("@UserId", userId),
-                Db.P("@WrappingId", wrappingId),
-                Db.P("@RibbonId", ribbonId),
-                Db.P("@CustomData", customData));
-
-            if (updated == 0)
-            {
-                Db.ExecuteNonQuery(
-                    @"INSERT INTO dbo.Cart (UserId, Quantity, WrappingId, RibbonId, IsCustom, CustomData)
-                      VALUES (@UserId, 1, @WrappingId, @RibbonId, 1, @CustomData)",
-                    Db.P("@UserId", userId),
-                    Db.P("@WrappingId", wrappingId),
-                    Db.P("@RibbonId", ribbonId),
-                    Db.P("@CustomData", customData));
-            }
-        }
-
-        public static void UpdateQuantity(int userId, int cartId, int quantity)
-        {
-            if (quantity < 1 || quantity > 99)
-            {
-                throw new ArgumentException("Quantity must be between 1 and 99.");
-            }
-
-            int updated = Db.ExecuteNonQuery(
-                "UPDATE dbo.Cart SET Quantity = @Quantity WHERE CartId = @CartId AND UserId = @UserId",
-                Db.P("@Quantity", quantity),
-                Db.P("@CartId", cartId),
-                Db.P("@UserId", userId));
-
-            if (updated == 0)
-            {
-                throw new InvalidOperationException("That bag item could not be found.");
-            }
-        }
-
-        public static void RemoveLine(int userId, int cartId)
-        {
-            int deleted = Db.ExecuteNonQuery(
-                "DELETE FROM dbo.Cart WHERE CartId = @CartId AND UserId = @UserId",
-                Db.P("@CartId", cartId),
-                Db.P("@UserId", userId));
-
-            if (deleted == 0)
-            {
-                throw new InvalidOperationException("That bag item could not be found.");
-            }
-        }
-
-        public static CartSummary GetCart(int userId)
-        {
-            CartSummary summary = new CartSummary();
-            summary.Lines = GetCartLines(userId);
-
-            decimal subtotal = 0m;
-            int itemCount = 0;
-
-            foreach (CartLine line in summary.Lines)
-            {
-                if (line.IsValid)
-                {
-                    subtotal += line.LineTotal;
-                    itemCount += line.Quantity;
-                }
-            }
-
-            summary.Subtotal = subtotal;
-            summary.DeliveryFee = Pricing.GetDeliveryFee(subtotal);
-            summary.GrandTotal = subtotal + summary.DeliveryFee;
-            summary.ItemCount = itemCount;
-            summary.HasFreeDelivery = subtotal >= Pricing.FreeDeliveryThreshold;
-            summary.AmountToFreeDelivery = Math.Max(0m, Pricing.FreeDeliveryThreshold - subtotal);
-            summary.HasInvalidLines = summary.Lines.Any(line => !line.IsValid);
-
-            return summary;
         }
 
         /// <summary>
-        /// Reads the bag and recalculates every line from the live catalogue.
-        /// This is the only price the application trusts.
+        /// Reads the cart and recalculates every price from the catalogue tables.
+        /// Also used inside the checkout transaction so the order total is always server-calculated.
         /// </summary>
-        public static List<CartLine> GetCartLines(int userId)
+        public static CartSummary Load(SqlConnection con, SqlTransaction tx, int userId)
         {
-            List<CartLine> lines = new List<CartLine>();
+            const string sql = @"
+SELECT c.CartId, c.FlowerId, f.Name, f.ImageUrl, f.UnitPrice, c.Quantity,
+       c.BouquetId, c.WrappingId, w.Name, w.Price, c.RibbonId, r.Name, r.Price
+FROM dbo.Cart c
+INNER JOIN dbo.Flowers f ON f.FlowerId = c.FlowerId
+LEFT JOIN dbo.WrappingSheets w ON w.WrappingId = c.WrappingId
+LEFT JOIN dbo.Ribbons r ON r.RibbonId = c.RibbonId
+WHERE c.UserId = @uid
+ORDER BY c.AddedAt, c.CartId;";
 
-            if (userId <= 0)
+            CartSummary summary = new CartSummary();
+            Dictionary<Guid, CartGroup> bouquets = new Dictionary<Guid, CartGroup>();
+            CartGroup singles = null;
+
+            using (SqlCommand cmd = new SqlCommand(sql, con, tx))
             {
-                return lines;
-            }
-
-            DataTable cart = Db.GetDataTable(
-                @"SELECT c.CartId, c.FlowerId, c.Quantity, c.WrappingId, c.RibbonId, c.IsCustom, c.CustomData,
-                         f.Name AS FlowerName, f.Category AS FlowerCategory, f.Price AS FlowerPrice,
-                         f.ImagePath AS FlowerImage, f.IsActive AS FlowerActive,
-                         w.Name AS WrappingName, w.Price AS WrappingPrice, w.IsActive AS WrappingActive,
-                         r.Name AS RibbonName, r.Price AS RibbonPrice, r.IsActive AS RibbonActive
-                  FROM dbo.Cart c
-                  LEFT JOIN dbo.Flowers f ON f.FlowerId = c.FlowerId
-                  LEFT JOIN dbo.WrappingSheets w ON w.WrappingId = c.WrappingId
-                  LEFT JOIN dbo.Ribbons r ON r.RibbonId = c.RibbonId
-                  WHERE c.UserId = @UserId
-                  ORDER BY c.AddedAt DESC, c.CartId DESC",
-                Db.P("@UserId", userId));
-
-            if (cart.Rows.Count == 0)
-            {
-                return lines;
-            }
-
-            // One lookup table for every flower, used to price custom bouquets.
-            DataTable flowerTable = Db.GetDataTable(
-                "SELECT FlowerId, Name, PricePerStem, IsActive FROM dbo.Flowers");
-
-            Dictionary<int, DataRow> flowers = new Dictionary<int, DataRow>();
-
-            foreach (DataRow row in flowerTable.Rows)
-            {
-                flowers[Convert.ToInt32(row["FlowerId"])] = row;
-            }
-
-            foreach (DataRow row in cart.Rows)
-            {
-                CartLine line = new CartLine
+                cmd.Parameters.AddWithValue("@uid", userId);
+                using (SqlDataReader r = cmd.ExecuteReader())
                 {
-                    CartId = Convert.ToInt32(row["CartId"]),
-                    IsCustom = Convert.ToBoolean(row["IsCustom"]),
-                    Quantity = Convert.ToInt32(row["Quantity"]),
-                    CustomFlowers = new List<CustomFlowerSelection>(),
-                    IsValid = true,
-                    ValidationMessage = string.Empty
-                };
+                    while (r.Read())
+                    {
+                        CartItem item = new CartItem();
+                        item.CartId = r.GetInt32(0);
+                        item.FlowerId = r.GetInt32(1);
+                        item.FlowerName = r.GetString(2);
+                        item.ImageUrl = r.GetString(3);
+                        item.UnitPrice = r.GetDecimal(4);
+                        item.Quantity = r.GetInt32(5);
 
-                if (!line.IsCustom)
-                {
-                    BuildSimpleLine(line, row);
+                        if (r.IsDBNull(6))
+                        {
+                            if (singles == null)
+                            {
+                                singles = new CartGroup();
+                                singles.IsBouquet = false;
+                                summary.Groups.Add(singles);
+                            }
+                            singles.Items.Add(item);
+                        }
+                        else
+                        {
+                            Guid bid = r.GetGuid(6);
+                            CartGroup g;
+                            if (!bouquets.TryGetValue(bid, out g))
+                            {
+                                g = new CartGroup();
+                                g.IsBouquet = true;
+                                g.BouquetId = bid;
+                                g.WrappingId = r.IsDBNull(7) ? 0 : r.GetInt32(7);
+                                g.WrappingName = r.IsDBNull(8) ? "" : r.GetString(8);
+                                g.WrappingPrice = r.IsDBNull(9) ? 0m : r.GetDecimal(9);
+                                g.RibbonId = r.IsDBNull(10) ? 0 : r.GetInt32(10);
+                                g.RibbonName = r.IsDBNull(11) ? "" : r.GetString(11);
+                                g.RibbonPrice = r.IsDBNull(12) ? 0m : r.GetDecimal(12);
+                                bouquets.Add(bid, g);
+                                summary.Groups.Add(g);
+                            }
+                            g.Items.Add(item);
+                        }
+                    }
                 }
-                else
-                {
-                    BuildCustomLine(line, row, flowers);
-                }
-
-                if (!line.IsValid)
-                {
-                    line.LineTotal = 0m;
-                }
-
-                lines.Add(line);
             }
 
-            return lines;
+            decimal subtotal = 0m;
+            foreach (CartGroup g in summary.Groups) subtotal += g.GroupTotal;
+            summary.Subtotal = subtotal;
+            summary.DeliveryFee = summary.Groups.Count > 0 ? Db.DeliveryFee : 0m;
+            summary.Total = summary.Subtotal + summary.DeliveryFee;
+            return summary;
         }
 
-        /* ----------------------------- INTERNALS ----------------------------- */
-
-        private static void BuildSimpleLine(CartLine line, DataRow row)
+        /// <summary>Total number of stems in the cart (shown in the header badge).</summary>
+        public static int StemCount(int userId)
         {
-            bool active =
-                row["FlowerName"] != DBNull.Value &&
-                row["FlowerActive"] != DBNull.Value &&
-                Convert.ToBoolean(row["FlowerActive"]);
-
-            line.FlowerId = row["FlowerId"] == DBNull.Value
-                ? (int?)null
-                : Convert.ToInt32(row["FlowerId"]);
-
-            if (!active)
-            {
-                line.Title = "Unavailable bouquet";
-                line.Description = "This bouquet has been removed from the collection.";
-                line.ImagePath = "~/Images/Flowers/rose.svg";
-                line.UnitPrice = 0m;
-                line.FlowerCost = 0m;
-                line.WrappingName = "Signature Wrap";
-                line.WrappingPrice = 0m;
-                line.RibbonName = "Blush Satin Ribbon";
-                line.RibbonPrice = 0m;
-                line.IsValid = false;
-                line.ValidationMessage = "Remove this item to continue to checkout.";
-                line.LineTotal = 0m;
-                return;
-            }
-
-            line.Title = Convert.ToString(row["FlowerName"]);
-            line.Description = Convert.ToString(row["FlowerCategory"]) + " \u00B7 ready-made bouquet";
-            line.ImagePath = row["FlowerImage"] == DBNull.Value
-                ? "~/Images/Flowers/rose.svg"
-                : Convert.ToString(row["FlowerImage"]);
-            line.UnitPrice = Convert.ToDecimal(row["FlowerPrice"]);
-            line.FlowerCost = line.UnitPrice;
-
-            // Ready-made bouquets arrive gift-wrapped; the price is included.
-            line.WrappingName = "Signature Wrap";
-            line.WrappingPrice = 0m;
-            line.RibbonName = "Blush Satin Ribbon";
-            line.RibbonPrice = 0m;
-
-            line.LineTotal = line.UnitPrice * line.Quantity;
+            object v = Db.Scalar("SELECT ISNULL(SUM(Quantity), 0) FROM dbo.Cart WHERE UserId = @u", Db.P("@u", userId));
+            return Convert.ToInt32(v);
         }
 
-        private static void BuildCustomLine(
-            CartLine line,
-            DataRow row,
-            Dictionary<int, DataRow> flowers)
+        // ---------------------------------------------------------------- adding
+
+        /// <summary>Adds one flower type from the Shop. Returns false if the flower does not exist or is inactive.</summary>
+        public static bool AddSingle(int userId, int flowerId, int quantity)
         {
-            line.Title = "Custom Bouquet";
-            line.ImagePath = "~/Images/Flowers/custom-bouquet.svg";
-            line.WrappingName = row["WrappingName"] == DBNull.Value
-                ? null
-                : Convert.ToString(row["WrappingName"]);
-            line.WrappingPrice = row["WrappingPrice"] == DBNull.Value
-                ? 0m
-                : Convert.ToDecimal(row["WrappingPrice"]);
-            line.RibbonName = row["RibbonName"] == DBNull.Value
-                ? null
-                : Convert.ToString(row["RibbonName"]);
-            line.RibbonPrice = row["RibbonPrice"] == DBNull.Value
-                ? 0m
-                : Convert.ToDecimal(row["RibbonPrice"]);
+            if (quantity < 1 || quantity > MaxQty) return false;
 
-            bool valid = true;
-
-            if (row["WrappingName"] == DBNull.Value ||
-                row["WrappingActive"] == DBNull.Value ||
-                !Convert.ToBoolean(row["WrappingActive"]))
+            using (SqlConnection con = Db.Open())
             {
-                valid = false;
-            }
+                if (!FlowerIsActive(con, null, flowerId)) return false;
 
-            if (row["RibbonName"] == DBNull.Value ||
-                row["RibbonActive"] == DBNull.Value ||
-                !Convert.ToBoolean(row["RibbonActive"]))
-            {
-                valid = false;
-            }
+                const string sql = @"
+UPDATE dbo.Cart
+   SET Quantity = CASE WHEN Quantity + @q > @max THEN @max ELSE Quantity + @q END
+ WHERE UserId = @u AND FlowerId = @f AND BouquetId IS NULL;
+IF @@ROWCOUNT = 0
+    INSERT INTO dbo.Cart (UserId, FlowerId, Quantity) VALUES (@u, @f, @q);";
 
-            List<CustomFlowerSelection> selections = null;
-
-            try
-            {
-                string json = Convert.ToString(row["CustomData"]);
-
-                if (!string.IsNullOrWhiteSpace(json))
+                using (SqlCommand cmd = new SqlCommand(sql, con))
                 {
-                    selections = Json.Deserialize<List<CustomFlowerSelection>>(json);
+                    cmd.Parameters.AddWithValue("@u", userId);
+                    cmd.Parameters.AddWithValue("@f", flowerId);
+                    cmd.Parameters.AddWithValue("@q", quantity);
+                    cmd.Parameters.AddWithValue("@max", MaxQty);
+                    cmd.ExecuteNonQuery();
                 }
             }
-            catch
-            {
-                selections = null;
-            }
+            return true;
+        }
 
-            if (selections == null || selections.Count == 0)
-            {
-                valid = false;
-                selections = new List<CustomFlowerSelection>();
-            }
+        /// <summary>
+        /// Saves a custom bouquet. flowers = FlowerId -> quantity. Only IDs and quantities come from the
+        /// browser; the server checks every ID against the database and never accepts a price.
+        /// </summary>
+        public static bool AddBouquet(int userId, IDictionary<int, int> flowers, int wrappingId, int ribbonId, out string error)
+        {
+            error = null;
 
-            decimal flowerCost = 0m;
+            if (flowers == null || flowers.Count == 0)
+            {
+                error = "Please choose at least one flower for your bouquet.";
+                return false;
+            }
             int stems = 0;
-            List<string> parts = new List<string>();
-
-            foreach (CustomFlowerSelection selection in selections)
+            foreach (KeyValuePair<int, int> kv in flowers)
             {
-                DataRow flowerRow;
-
-                if (selection.Quantity <= 0 ||
-                    !flowers.TryGetValue(selection.FlowerId, out flowerRow) ||
-                    flowerRow["IsActive"] == DBNull.Value ||
-                    !Convert.ToBoolean(flowerRow["IsActive"]))
+                if (kv.Value < 1 || kv.Value > MaxQty)
                 {
-                    valid = false;
-                    continue;
+                    error = "Each flower quantity must be between 1 and " + MaxQty + ".";
+                    return false;
+                }
+                stems += kv.Value;
+            }
+            if (stems > 200)
+            {
+                error = "That is a very large bouquet! Please keep it to 200 stems or fewer.";
+                return false;
+            }
+
+            using (SqlConnection con = Db.Open())
+            using (SqlTransaction tx = con.BeginTransaction())
+            {
+                foreach (int flowerId in flowers.Keys)
+                {
+                    if (!FlowerIsActive(con, tx, flowerId))
+                    {
+                        tx.Rollback();
+                        error = "One of the selected flowers is no longer available.";
+                        return false;
+                    }
+                }
+                if (!OptionIsActive(con, tx, "dbo.WrappingSheets", "WrappingId", wrappingId))
+                {
+                    tx.Rollback();
+                    error = "Please choose a valid wrapping paper.";
+                    return false;
+                }
+                if (!OptionIsActive(con, tx, "dbo.Ribbons", "RibbonId", ribbonId))
+                {
+                    tx.Rollback();
+                    error = "Please choose a valid ribbon.";
+                    return false;
                 }
 
-                decimal stemPrice = Convert.ToDecimal(flowerRow["PricePerStem"]);
-                flowerCost += stemPrice * selection.Quantity;
-                stems += selection.Quantity;
-
-                parts.Add(selection.Quantity + " \u00D7 " + Convert.ToString(flowerRow["Name"]));
+                Guid bouquetId = Guid.NewGuid();
+                const string sql = @"INSERT INTO dbo.Cart (UserId, FlowerId, Quantity, BouquetId, WrappingId, RibbonId)
+                                     VALUES (@u, @f, @q, @b, @w, @r);";
+                foreach (KeyValuePair<int, int> kv in flowers)
+                {
+                    using (SqlCommand cmd = new SqlCommand(sql, con, tx))
+                    {
+                        cmd.Parameters.AddWithValue("@u", userId);
+                        cmd.Parameters.AddWithValue("@f", kv.Key);
+                        cmd.Parameters.AddWithValue("@q", kv.Value);
+                        cmd.Parameters.AddWithValue("@b", bouquetId);
+                        cmd.Parameters.AddWithValue("@w", wrappingId);
+                        cmd.Parameters.AddWithValue("@r", ribbonId);
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+                tx.Commit();
             }
-
-            line.CustomFlowers = selections;
-            line.StemCount = stems;
-            line.FlowerCost = flowerCost;
-            line.UnitPrice = flowerCost + line.WrappingPrice + line.RibbonPrice;
-            line.Description = parts.Count > 0
-                ? string.Join(", ", parts)
-                : "Custom arrangement";
-
-            if (stems <= 0)
-            {
-                valid = false;
-            }
-
-            line.IsValid = valid;
-            line.ValidationMessage = valid
-                ? string.Empty
-                : "Some options in this bouquet are no longer available. Please remove it and build again.";
-
-            line.LineTotal = line.UnitPrice * line.Quantity;
+            return true;
         }
 
-        private static List<CustomFlowerSelection> NormalizeSelections(
-            IList<CustomFlowerSelection> input)
+        // ---------------------------------------------------------------- editing (ownership checked via UserId)
+
+        public static bool UpdateQuantity(int userId, int cartId, int quantity)
         {
-            if (input == null)
-            {
-                throw new ArgumentException("Please choose at least one flower.");
-            }
-
-            Dictionary<int, int> merged = new Dictionary<int, int>();
-            int totalStems = 0;
-
-            foreach (CustomFlowerSelection item in input)
-            {
-                if (item == null || item.FlowerId <= 0 || item.Quantity <= 0)
-                {
-                    continue;
-                }
-
-                if (item.Quantity > Pricing.MaxStemsPerFlowerType)
-                {
-                    throw new ArgumentException(
-                        "You can choose up to " + Pricing.MaxStemsPerFlowerType + " stems of one flower.");
-                }
-
-                int current;
-
-                if (merged.TryGetValue(item.FlowerId, out current))
-                {
-                    merged[item.FlowerId] = current + item.Quantity;
-                }
-                else
-                {
-                    merged[item.FlowerId] = item.Quantity;
-                }
-
-                totalStems += item.Quantity;
-            }
-
-            if (merged.Count == 0)
-            {
-                throw new ArgumentException("Please choose at least one flower.");
-            }
-
-            if (totalStems > Pricing.MaxStemsPerBouquet)
-            {
-                throw new ArgumentException(
-                    "A bouquet can hold up to " + Pricing.MaxStemsPerBouquet + " stems.");
-            }
-
-            List<CustomFlowerSelection> result = new List<CustomFlowerSelection>();
-
-            foreach (KeyValuePair<int, int> pair in merged.OrderBy(p => p.Key))
-            {
-                result.Add(new CustomFlowerSelection
-                {
-                    FlowerId = pair.Key,
-                    Quantity = pair.Value
-                });
-            }
-
-            return result;
+            if (quantity < 1 || quantity > MaxQty) return false;
+            return Exec("UPDATE dbo.Cart SET Quantity = @q WHERE CartId = @c AND UserId = @u",
+                        Db.P("@q", quantity), Db.P("@c", cartId), Db.P("@u", userId)) > 0;
         }
 
-        private static List<FlowerProduct> MapProducts(DataTable table)
+        public static void RemoveItem(int userId, int cartId)
         {
-            List<FlowerProduct> list = new List<FlowerProduct>();
+            Exec("DELETE FROM dbo.Cart WHERE CartId = @c AND UserId = @u", Db.P("@c", cartId), Db.P("@u", userId));
+        }
 
-            foreach (DataRow row in table.Rows)
+        public static void RemoveBouquet(int userId, Guid bouquetId)
+        {
+            Exec("DELETE FROM dbo.Cart WHERE BouquetId = @b AND UserId = @u", Db.P("@b", bouquetId), Db.P("@u", userId));
+        }
+
+        /// <summary>Changes the wrapping and ribbon of a bouquet already in the cart.</summary>
+        public static bool UpdateBouquetOptions(int userId, Guid bouquetId, int wrappingId, int ribbonId)
+        {
+            using (SqlConnection con = Db.Open())
             {
-                list.Add(new FlowerProduct
-                {
-                    FlowerId = Convert.ToInt32(row["FlowerId"]),
-                    Name = Convert.ToString(row["Name"]),
-                    Category = Convert.ToString(row["Category"]),
-                    Description = Convert.ToString(row["Description"]),
-                    Price = Convert.ToDecimal(row["Price"]),
-                    PricePerStem = Convert.ToDecimal(row["PricePerStem"]),
-                    ImagePath = Convert.ToString(row["ImagePath"]),
-                    Badge = row["Badge"] == DBNull.Value ? null : Convert.ToString(row["Badge"])
-                });
-            }
+                if (!OptionIsActive(con, null, "dbo.WrappingSheets", "WrappingId", wrappingId)) return false;
+                if (!OptionIsActive(con, null, "dbo.Ribbons", "RibbonId", ribbonId)) return false;
 
-            return list;
+                using (SqlCommand cmd = new SqlCommand(
+                    "UPDATE dbo.Cart SET WrappingId = @w, RibbonId = @r WHERE BouquetId = @b AND UserId = @u", con))
+                {
+                    cmd.Parameters.AddWithValue("@w", wrappingId);
+                    cmd.Parameters.AddWithValue("@r", ribbonId);
+                    cmd.Parameters.AddWithValue("@b", bouquetId);
+                    cmd.Parameters.AddWithValue("@u", userId);
+                    cmd.ExecuteNonQuery();
+                }
+            }
+            return true;
+        }
+
+        // ---------------------------------------------------------------- helpers
+
+        private static int Exec(string sql, params SqlParameter[] ps)
+        {
+            using (SqlConnection con = Db.Open())
+            using (SqlCommand cmd = new SqlCommand(sql, con))
+            {
+                cmd.Parameters.AddRange(ps);
+                return cmd.ExecuteNonQuery();
+            }
+        }
+
+        private static bool FlowerIsActive(SqlConnection con, SqlTransaction tx, int flowerId)
+        {
+            using (SqlCommand cmd = new SqlCommand("SELECT COUNT(*) FROM dbo.Flowers WHERE FlowerId = @f AND IsActive = 1", con, tx))
+            {
+                cmd.Parameters.AddWithValue("@f", flowerId);
+                return Convert.ToInt32(cmd.ExecuteScalar()) > 0;
+            }
+        }
+
+        // table and column names below are fixed strings from this file (never user input).
+        private static bool OptionIsActive(SqlConnection con, SqlTransaction tx, string table, string idColumn, int id)
+        {
+            using (SqlCommand cmd = new SqlCommand("SELECT COUNT(*) FROM " + table + " WHERE " + idColumn + " = @id AND IsActive = 1", con, tx))
+            {
+                cmd.Parameters.AddWithValue("@id", id);
+                return Convert.ToInt32(cmd.ExecuteScalar()) > 0;
+            }
         }
     }
 }

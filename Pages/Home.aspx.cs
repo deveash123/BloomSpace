@@ -1,43 +1,30 @@
 using System;
-using System.Web.UI;
+using System.Data;
+using BloomSpace;
 
-namespace BloomSpace.Pages
+public partial class Pages_Home : System.Web.UI.Page
 {
-    public partial class HomePage : BloomPage
+    protected void Page_Load(object sender, EventArgs e)
     {
-        protected void Page_Load(object sender, EventArgs e)
+        if (IsPostBack) return;
+
+        try
         {
-            if (Request.QueryString["error"] == "1")
-            {
-                pnlGlobalError.Visible = true;
-            }
-
-            if (Request.QueryString["welcome"] == "1" && Auth.IsLoggedIn)
-            {
-                pnlWelcome.Visible = true;
-                litWelcomeName.Text = Server.HtmlEncode(Auth.FirstName);
-            }
-
-            if (!IsPostBack)
-            {
-                LoadFeaturedFlowers();
-            }
+            // Featured flowers come from SQL Server (IsFeatured = 1).
+            DataTable dt = Db.Table(
+                @"SELECT TOP (4) FlowerId, Name, Category, UnitPrice, ImageUrl
+                  FROM dbo.Flowers WHERE IsActive = 1 AND IsFeatured = 1
+                  ORDER BY FlowerId");
+            rptFeatured.DataSource = dt;
+            rptFeatured.DataBind();
+            pnlFeatured.Visible = dt.Rows.Count > 0;
+            pnlFeaturedEmpty.Visible = dt.Rows.Count == 0;
         }
-
-        private void LoadFeaturedFlowers()
+        catch (Exception ex)
         {
-            try
-            {
-                rptFeatured.DataSource = CartService.GetFeaturedFlowers(4);
-                rptFeatured.DataBind();
-            }
-            catch (Exception exception)
-            {
-                Logger.Log(exception);
-                pnlFeaturedError.Visible = true;
-                litFeaturedError.Text =
-                    "Our collection is taking a moment to load. Please refresh the page, or make sure the BloomSpaceDB database has been created.";
-            }
+            ErrorLog.Write(ex);
+            pnlFeatured.Visible = false;
+            pnlFeaturedEmpty.Visible = true;
         }
     }
 }

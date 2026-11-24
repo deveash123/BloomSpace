@@ -1,149 +1,116 @@
-<%@ Master Language="C#" AutoEventWireup="true" CodeFile="Site.Master.cs" Inherits="BloomSpace.SiteMaster" %>
-
+<%@ Master Language="C#" AutoEventWireup="true" CodeFile="Site.Master.cs" Inherits="SiteMaster" %>
 <!DOCTYPE html>
 <html lang="en">
 <head runat="server">
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#FFF9F2" />
-    <title><%: Page.Title %></title>
-    <meta name="description" content="Bloom Space — thoughtfully arranged luxury flowers for life's most meaningful moments. Every Bloom Tells a Story." />
-
+    <meta name="description" content="Bloom Space - Every Bloom Tells a Story. Fresh flowers and custom bouquets, delivered with care." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet" />
-
-    <link rel="stylesheet" href="<%= ResolveUrl("~/CSS/Style.css") %>" />
-    <link rel="icon" type="image/svg+xml" href="<%= ResolveUrl("~/Images/Logo/favicon.svg") %>" />
-
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&amp;family=Poppins:wght@300;400;500;600&amp;display=swap" rel="stylesheet" />
+    <link href="~/CSS/Style.css" rel="stylesheet" runat="server" />
+    <link rel="icon" type="image/svg+xml" href="~/Images/Logo/logo-mark.svg" runat="server" />
     <asp:ContentPlaceHolder ID="HeadContent" runat="server" />
 </head>
 <body>
-<form id="form1" runat="server">
+    <form id="form1" runat="server">
 
-    <a class="skip-link" href="#main-content">Skip to content</a>
+        <a class="skip-link" href="#main">Skip to content</a>
 
-    <div class="announcement">
-        <span>Complimentary delivery on orders above &#8377;2,000</span>
-        <span class="announcement-dot" aria-hidden="true"></span>
-        <span>Hand-tied in Chennai, delivered with care</span>
-    </div>
+        <div class="announcement-bar">
+            Every Bloom Tells a Story &nbsp;&middot;&nbsp; Flat delivery fee of <asp:Literal ID="litFee" runat="server" /> on every order
+        </div>
 
-    <header class="site-header" id="siteHeader">
-        <div class="container navbar">
-
-            <a class="brand" href="<%= ResolveUrl("~/Pages/Home.aspx") %>" aria-label="Bloom Space home">
-                <img class="brand-mark" src="<%= ResolveUrl("~/Images/Logo/bloom-mark.svg") %>" alt="" width="38" height="38" />
-                <span class="brand-text">
-                    BLOOM<span>SPACE</span>
-                    <small>Every bloom tells a story</small>
-                </span>
-            </a>
-
-            <nav class="nav-links" id="navLinks" aria-label="Primary navigation">
-                <a class="<%= HomeClass %>" href="<%= ResolveUrl("~/Pages/Home.aspx") %>">Home</a>
-                <a class="<%= ShopClass %>" href="<%= ResolveUrl("~/Pages/Shop.aspx") %>">Shop Flowers</a>
-                <a class="<%= CustomClass %>" href="<%= ResolveUrl("~/Pages/CustomBouquet.aspx") %>">Custom Bouquet</a>
-                <a class="<%= AboutClass %>" href="<%= ResolveUrl("~/Pages/About.aspx") %>">Our Story</a>
-                <a class="<%= ContactClass %>" href="<%= ResolveUrl("~/Pages/Contact.aspx") %>">Contact</a>
-
-                <div class="mobile-account">
-                    <asp:Panel ID="pnlMobileLoggedIn" runat="server" Visible="false">
-                        <span class="mobile-account-name">Signed in as <asp:Literal ID="litMobileFirstName" runat="server" /></span>
-                        <asp:LinkButton ID="lnkLogoutMobile" runat="server" CssClass="mobile-account-link" CausesValidation="false" OnClick="lnkLogout_Click">Sign out</asp:LinkButton>
-                    </asp:Panel>
-                    <asp:Panel ID="pnlMobileGuest" runat="server" Visible="false">
-                        <a href="<%= ResolveUrl("~/Account/Login.aspx") %>">Sign in</a>
-                        <a href="<%= ResolveUrl("~/Account/Register.aspx") %>">Create account</a>
-                    </asp:Panel>
-                </div>
-            </nav>
-
-            <div class="nav-actions">
-
-                <asp:Panel ID="pnlLoggedIn" runat="server" CssClass="account-nav" Visible="false">
-                    <span class="account-greeting">Hello, <asp:Literal ID="litFirstName" runat="server" /></span>
-                    <asp:LinkButton ID="lnkLogout" runat="server" CssClass="account-link" CausesValidation="false" OnClick="lnkLogout_Click">Sign out</asp:LinkButton>
-                </asp:Panel>
-
-                <asp:Panel ID="pnlGuest" runat="server" CssClass="account-nav" Visible="false">
-                    <a class="account-link" href="<%= ResolveUrl("~/Account/Login.aspx") %>">Sign in</a>
-                    <a class="account-cta" href="<%= ResolveUrl("~/Account/Register.aspx") %>">Create account</a>
-                </asp:Panel>
-
-                <a class="bag-link" href="<%= ResolveUrl("~/Pages/Cart.aspx") %>" aria-label="Shopping bag">
-                    <svg class="bag-icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M6 8h12l-1 12H7L6 8Z" />
-                        <path d="M9 8V6a3 3 0 0 1 6 0v2" />
-                    </svg>
-                    <span class="bag-label">Bag</span>
-                    <span class="bag-count"><asp:Literal ID="litCartCount" runat="server" Text="0" /></span>
+        <header class="site-header">
+            <div class="header-inner">
+                <a class="brand" href="<%= ResolveUrl("~/Pages/Home.aspx") %>">
+                    <img src="<%= ResolveUrl("~/Images/Logo/logo-mark.svg") %>" alt="" width="38" height="38" />
+                    <span class="brand-name">Bloom Space</span>
                 </a>
 
-                <button type="button" class="menu-toggle" id="menuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="navLinks">
-                    <span></span>
-                    <span></span>
+                <button type="button" class="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="siteNav">
+                    <span></span><span></span><span></span>
                 </button>
+
+                <nav id="siteNav" class="site-nav" aria-label="Main navigation">
+                    <ul class="nav-links">
+                        <li><a class="<%= Active("Home.aspx") %>" href="<%= ResolveUrl("~/Pages/Home.aspx") %>">Home</a></li>
+                        <li><a class="<%= Active("Shop.aspx") %>" href="<%= ResolveUrl("~/Pages/Shop.aspx") %>">Shop</a></li>
+                        <li><a class="<%= Active("CustomBouquet.aspx") %>" href="<%= ResolveUrl("~/Pages/CustomBouquet.aspx") %>">Custom Bouquet</a></li>
+                        <li><a class="<%= Active("Orders.aspx") %>" href="<%= ResolveUrl("~/Pages/Orders.aspx") %>">Track Order</a></li>
+                        <li><a class="<%= Active("About.aspx") %>" href="<%= ResolveUrl("~/Pages/About.aspx") %>">About</a></li>
+                        <li><a class="<%= Active("FAQ.aspx") %>" href="<%= ResolveUrl("~/Pages/FAQ.aspx") %>">FAQ</a></li>
+                        <li><a class="<%= Active("Contact.aspx") %>" href="<%= ResolveUrl("~/Pages/Contact.aspx") %>">Contact</a></li>
+                    </ul>
+
+                    <div class="nav-actions">
+                        <asp:PlaceHolder ID="phGuest" runat="server">
+                            <a class="nav-text-link" href="<%= ResolveUrl("~/Account/Login.aspx") %>">Log in</a>
+                            <a class="btn btn-small btn-outline" href="<%= ResolveUrl("~/Account/Register.aspx") %>">Register</a>
+                        </asp:PlaceHolder>
+                        <asp:PlaceHolder ID="phUser" runat="server" Visible="false">
+                            <a class="nav-text-link" href="<%= ResolveUrl("~/Pages/Orders.aspx") %>">My Orders</a>
+                            <span class="nav-user">Hi, <asp:Literal ID="litName" runat="server" /></span>
+                            <asp:LinkButton ID="lbLogout" runat="server" CssClass="nav-text-link" CausesValidation="false" OnClick="lbLogout_Click">Log out</asp:LinkButton>
+                        </asp:PlaceHolder>
+                        <a class="cart-link" href="<%= ResolveUrl("~/Pages/Cart.aspx") %>" aria-label="Shopping cart">
+                            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.4 11.2a1.5 1.5 0 0 0 1.5 1.2h8.2a1.5 1.5 0 0 0 1.5-1.1L20.5 8H6.2" /><circle cx="9.5" cy="20" r="1.2" /><circle cx="17" cy="20" r="1.2" /></svg>
+                            <span>Cart</span>
+                            <asp:Literal ID="litCartBadge" runat="server" />
+                        </a>
+                    </div>
+                </nav>
             </div>
+        </header>
 
-        </div>
-    </header>
+        <main id="main">
+            <asp:ContentPlaceHolder ID="MainContent" runat="server" />
+        </main>
 
-    <main id="main-content">
-        <asp:ContentPlaceHolder ID="MainContent" runat="server" />
-    </main>
-
-    <footer class="site-footer">
-        <div class="container footer-main">
-
-            <div class="footer-brand">
-                <a class="brand brand-footer" href="<%= ResolveUrl("~/Pages/Home.aspx") %>">
-                    <img class="brand-mark" src="<%= ResolveUrl("~/Images/Logo/bloom-mark.svg") %>" alt="" width="40" height="40" />
-                    <span class="brand-text">
-                        BLOOM<span>SPACE</span>
-                        <small>Every bloom tells a story</small>
-                    </span>
-                </a>
-                <p>Thoughtfully arranged flowers for life's beautiful moments. Hand-tied with care in Chennai, delivered across India.</p>
+        <footer class="site-footer">
+            <div class="container footer-grid">
+                <div class="footer-brand">
+                    <a class="brand" href="<%= ResolveUrl("~/Pages/Home.aspx") %>">
+                        <img src="<%= ResolveUrl("~/Images/Logo/logo-mark.svg") %>" alt="" width="38" height="38" />
+                        <span class="brand-name">Bloom Space</span>
+                    </a>
+                    <p class="footer-tagline">Every Bloom Tells a Story.</p>
+                    <p class="footer-text">Fresh-cut flowers and custom bouquets, arranged with care and delivered to the people you love.</p>
+                </div>
+                <div>
+                    <h4>Shop</h4>
+                    <ul class="footer-links">
+                        <li><a href="<%= ResolveUrl("~/Pages/Shop.aspx") %>">All Flowers</a></li>
+                        <li><a href="<%= ResolveUrl("~/Pages/CustomBouquet.aspx") %>">Custom Bouquet</a></li>
+                        <li><a href="<%= ResolveUrl("~/Pages/Orders.aspx") %>">Track My Order</a></li>
+                        <li><a href="<%= ResolveUrl("~/Pages/Cart.aspx") %>">Your Cart</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4>Help</h4>
+                    <ul class="footer-links">
+                        <li><a href="<%= ResolveUrl("~/Pages/FAQ.aspx") %>">FAQ</a></li>
+                        <li><a href="<%= ResolveUrl("~/Pages/DeliveryPolicy.aspx") %>">Delivery Policy</a></li>
+                        <li><a href="<%= ResolveUrl("~/Pages/Contact.aspx") %>">Contact Us</a></li>
+                        <li><a href="<%= ResolveUrl("~/Pages/About.aspx") %>">About Us</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4>Visit &amp; Call</h4>
+                    <ul class="footer-links footer-contact">
+                        <li>12 Garden Street, Chennai</li>
+                        <li>Tamil Nadu 600001</li>
+                        <li>+91 90000 00000</li>
+                        <li>hello@bloomspace.example</li>
+                    </ul>
+                </div>
             </div>
-
-            <div class="footer-column">
-                <h4>Explore</h4>
-                <a href="<%= ResolveUrl("~/Pages/Shop.aspx") %>">Shop Flowers</a>
-                <a href="<%= ResolveUrl("~/Pages/CustomBouquet.aspx") %>">Custom Bouquet</a>
-                <a href="<%= ResolveUrl("~/Pages/About.aspx") %>">Our Story</a>
-                <a href="<%= ResolveUrl("~/Pages/Contact.aspx") %>">Contact Us</a>
+            <div class="footer-bottom">
+                <div class="container">&copy; <%= DateTime.Now.Year %> Bloom Space. All rights reserved.</div>
             </div>
+        </footer>
 
-            <div class="footer-column">
-                <h4>Information</h4>
-                <a href="<%= ResolveUrl("~/Pages/FAQ.aspx") %>">FAQs</a>
-                <a href="<%= ResolveUrl("~/Pages/DeliveryPolicy.aspx") %>">Delivery Policy</a>
-                <a href="<%= ResolveUrl("~/Pages/Cart.aspx") %>">Your Bag</a>
-                <a href="<%= ResolveUrl("~/Account/Login.aspx") %>">Sign In</a>
-            </div>
-
-            <div class="footer-column">
-                <h4>Get In Touch</h4>
-                <a href="mailto:hello@bloomspace.in">hello@bloomspace.in</a>
-                <a href="tel:+914412345678">+91 44 1234 5678</a>
-                <span>Anna Nagar, Chennai,<br />Tamil Nadu 600040</span>
-                <span class="footer-social">Instagram &middot; Pinterest</span>
-            </div>
-
-        </div>
-
-        <div class="container footer-bottom">
-            <span>&copy; <asp:Literal ID="litYear" runat="server" /> Bloom Space. All rights reserved.</span>
-            <span>Made with care, in every petal.</span>
-        </div>
-    </footer>
-
-    <div class="toast" id="toast" role="status" aria-live="polite"></div>
-
+    </form>
     <script src="<%= ResolveUrl("~/JavaScript/script.js") %>"></script>
-    <asp:ContentPlaceHolder ID="ScriptContent" runat="server" />
-
-</form>
 </body>
 </html>

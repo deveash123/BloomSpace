@@ -1,95 +1,65 @@
-<%@ Page Title="Shop Flowers | Bloom Space" Language="C#" MasterPageFile="~/Site.Master" AutoEventWireup="true" CodeFile="Shop.aspx.cs" Inherits="BloomSpace.Pages.ShopPage" %>
-<%@ Import Namespace="System.Web" %>
+<%@ Page Title="Shop Flowers" Language="C#" MasterPageFile="~/Site.Master" AutoEventWireup="true" CodeFile="Shop.aspx.cs" Inherits="Pages_Shop" %>
 
-<asp:Content ID="MainContent" ContentPlaceHolderID="MainContent" runat="server">
+<asp:Content ID="Content1" ContentPlaceHolderID="MainContent" runat="server">
 
-    <section class="page-hero page-hero-compact">
-        <div class="container page-hero-inner">
-            <div>
-                <span class="eyebrow">The collection</span>
-                <h1>Flowers for <em>every feeling.</em></h1>
-                <p>Ready-made bouquets, hand-tied by our florists and delivered across India.</p>
-            </div>
-            <div class="page-hero-aside">
-                <span class="page-hero-number">08</span>
-                <span class="page-hero-label">Seasonal<br />bouquets</span>
-            </div>
+    <section class="page-hero">
+        <div class="container">
+            <span class="eyebrow">The flower shop</span>
+            <h1>Shop Flowers</h1>
+            <p>Fresh stems, priced per stem in Indian Rupees. Add a few to your cart, or build a full bouquet of your own.</p>
         </div>
     </section>
 
-    <section class="section shop-section">
+    <section class="section-tight">
         <div class="container">
 
-            <asp:Panel ID="pnlMessage" runat="server" Visible="false" CssClass="alert alert-success">
+            <nav class="filter-bar" aria-label="Flower categories">
+                <a class="filter-pill <%= Tab(null) %>" href="<%= ResolveUrl("~/Pages/Shop.aspx") %>">All</a>
+                <a class="filter-pill <%= Tab("Roses") %>" href="<%= ResolveUrl("~/Pages/Shop.aspx?category=Roses") %>">Roses</a>
+                <a class="filter-pill <%= Tab("Tulips") %>" href="<%= ResolveUrl("~/Pages/Shop.aspx?category=Tulips") %>">Tulips</a>
+                <a class="filter-pill <%= Tab("Lilies") %>" href="<%= ResolveUrl("~/Pages/Shop.aspx?category=Lilies") %>">Lilies</a>
+                <a class="filter-pill <%= Tab("Sunflowers") %>" href="<%= ResolveUrl("~/Pages/Shop.aspx?category=Sunflowers") %>">Sunflowers</a>
+            </nav>
+
+            <asp:Panel ID="pnlMessage" runat="server" Visible="false" CssClass="alert alert-success" role="status">
                 <asp:Literal ID="litMessage" runat="server" />
             </asp:Panel>
 
-            <div class="shop-toolbar">
-                <div class="filter-buttons" role="group" aria-label="Filter bouquets by flower">
-                    <a class="<%= FilterClass("") %>" href="<%= ResolveUrl("~/Pages/Shop.aspx") %>">All flowers</a>
-                    <a class="<%= FilterClass("Roses") %>" href="<%= ResolveUrl("~/Pages/Shop.aspx") %>?category=Roses">Roses</a>
-                    <a class="<%= FilterClass("Tulips") %>" href="<%= ResolveUrl("~/Pages/Shop.aspx") %>?category=Tulips">Tulips</a>
-                    <a class="<%= FilterClass("Lilies") %>" href="<%= ResolveUrl("~/Pages/Shop.aspx") %>?category=Lilies">Lilies</a>
-                    <a class="<%= FilterClass("Sunflowers") %>" href="<%= ResolveUrl("~/Pages/Shop.aspx") %>?category=Sunflowers">Sunflowers</a>
-                </div>
-
-                <label class="shop-search">
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <circle cx="11" cy="11" r="6.5" />
-                        <path d="m16 16 4.5 4.5" />
-                    </svg>
-                    <input type="search" id="shopSearch" placeholder="Search this collection..." autocomplete="off" aria-label="Search this collection" />
-                </label>
-            </div>
-
-            <div class="shop-meta">
-                <span class="shop-meta-title"><asp:Literal ID="litCategoryLabel" runat="server" /></span>
-                <span class="result-count" id="shopCount"><asp:Literal ID="litResultCount" runat="server" /></span>
-            </div>
-
-            <div class="product-grid product-grid-shop" id="shopGrid">
-                <asp:Repeater ID="rptProducts" runat="server">
-                    <ItemTemplate>
-                        <article class="product-card" data-name='<%#: Eval("Name") %>' data-category='<%#: Eval("Category") %>'>
-                            <div class="product-media">
-                                <img src='<%# ResolveUrl((string)Eval("ImagePath")) %>' alt='<%#: Eval("Name") %>' loading="lazy" />
-                                <span class="product-badge" runat="server" visible='<%# Eval("HasBadge") %>'><%#: Eval("Badge") %></span>
-                                <asp:LinkButton ID="lnkAdd" runat="server"
-                                    CssClass="quick-add"
-                                    CommandArgument='<%# Eval("FlowerId") %>'
-                                    CausesValidation="false"
-                                    OnCommand="rptProducts_Add">
-                                    Add to bag <span aria-hidden="true">+</span>
-                                </asp:LinkButton>
-                            </div>
-                            <div class="product-info">
-                                <span class="product-category"><%#: Eval("Category") %></span>
-                                <h3><%#: Eval("Name") %></h3>
-                                <p><%#: Eval("Description") %></p>
-                                <div class="product-foot">
-                                    <span class="product-price"><%#: Eval("PriceText") %></span>
-                                    <span class="product-note">Hand-tied</span>
+            <asp:Panel ID="pnlProducts" runat="server">
+                <div class="product-grid">
+                    <asp:Repeater ID="rptProducts" runat="server" OnItemCommand="rptProducts_ItemCommand">
+                        <ItemTemplate>
+                            <article class="product-card">
+                                <div class="product-media">
+                                    <img src="<%#: ResolveUrl((string)Eval("ImageUrl")) %>" alt="<%#: Eval("Name") %>" loading="lazy" />
                                 </div>
-                            </div>
-                        </article>
-                    </ItemTemplate>
-                </asp:Repeater>
-            </div>
-
-            <asp:Panel ID="pnlEmpty" runat="server" Visible="false" CssClass="empty-state">
-                <span class="empty-mark" aria-hidden="true"></span>
-                <h2>No blooms here just yet.</h2>
-                <p>This collection is resting. Explore all of our flowers, or design a bouquet that is entirely your own.</p>
-                <div class="empty-actions">
-                    <a class="btn btn-primary" href="<%= ResolveUrl("~/Pages/Shop.aspx") %>">View all flowers</a>
-                    <a class="btn btn-outline" href="<%= ResolveUrl("~/Pages/CustomBouquet.aspx") %>">Build a bouquet</a>
+                                <div class="product-body">
+                                    <span class="product-cat"><%#: Eval("Category") %></span>
+                                    <h3><%#: Eval("Name") %></h3>
+                                    <p class="product-desc"><%#: Eval("Description") %></p>
+                                    <div class="product-foot">
+                                        <span class="price">&#8377;<%#: ((decimal)Eval("UnitPrice")).ToString("N2", new System.Globalization.CultureInfo("en-IN")) %> <small>/ stem</small></span>
+                                        <asp:Button ID="btnAdd" runat="server" Text="Add to Cart" CssClass="btn btn-small"
+                                            CommandName="add" CommandArgument='<%# Eval("FlowerId") %>' CausesValidation="false" />
+                                    </div>
+                                </div>
+                            </article>
+                        </ItemTemplate>
+                    </asp:Repeater>
                 </div>
             </asp:Panel>
 
-            <div class="shop-note">
-                <span>Complimentary delivery on orders above &#8377;2,000.</span>
-                <span>Every bouquet is hand-tied on the morning of delivery.</span>
-            </div>
+            <asp:Panel ID="pnlEmpty" runat="server" Visible="false" CssClass="empty-state">
+                <div class="empty-icon">
+                    <svg viewBox="0 0 24 24" width="38" height="38" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21V11" /><path d="M12 11c0-4 2.5-6.5 6.500-6.5 0 4-2.5 6.500-6.500 6.500z" /><path d="M12 14c0-3-2-5-5-5 0 3 2 5 5 5z" /></svg>
+                </div>
+                <h2>No flowers here yet</h2>
+                <p>We could not find any flowers in this category right now. Please check back soon or browse everything we have.</p>
+                <div class="empty-actions">
+                    <a class="btn" href="<%= ResolveUrl("~/Pages/Shop.aspx") %>">View All Flowers</a>
+                    <a class="btn btn-outline" href="<%= ResolveUrl("~/Pages/CustomBouquet.aspx") %>">Custom Bouquet</a>
+                </div>
+            </asp:Panel>
 
         </div>
     </section>

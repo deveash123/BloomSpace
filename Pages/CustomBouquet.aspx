@@ -1,246 +1,147 @@
-<%@ Page Title="Custom Bouquet Builder | Bloom Space" Language="C#" MasterPageFile="~/Site.Master" AutoEventWireup="true" CodeFile="CustomBouquet.aspx.cs" Inherits="BloomSpace.Pages.CustomBouquetPage" %>
+<%@ Page Title="Custom Bouquet" Language="C#" MasterPageFile="~/Site.Master" AutoEventWireup="true" CodeFile="CustomBouquet.aspx.cs" Inherits="Pages_CustomBouquet" %>
 
-<asp:Content ID="MainContent" ContentPlaceHolderID="MainContent" runat="server">
+<asp:Content ID="Content1" ContentPlaceHolderID="MainContent" runat="server">
 
-    <section class="page-hero page-hero-builder">
-        <div class="container page-hero-inner">
-            <div>
-                <span class="eyebrow">The bouquet studio</span>
-                <h1>Build something <em>entirely yours.</em></h1>
-                <p>
-                    Choose your stems, wrapping and ribbon. Your live estimate updates as you
-                    design, and our florists hand-tie every stem to order.
-                </p>
-            </div>
-            <div class="builder-steps" aria-label="Bouquet builder steps">
-                <span><b>01</b> Flowers</span>
-                <span><b>02</b> Wrapping</span>
-                <span><b>03</b> Ribbon</span>
-            </div>
+    <section class="page-hero">
+        <div class="container">
+            <span class="eyebrow">Design your own</span>
+            <h1>Custom Bouquet Builder</h1>
+            <p>Choose your flowers, pick a wrapping and ribbon, and watch the price and preview update as you design.</p>
         </div>
     </section>
 
-    <section class="section builder-section">
+    <section class="section-tight">
         <div class="container">
 
-            <asp:Panel ID="pnlPageError" runat="server" Visible="false" CssClass="alert alert-error">
-                <asp:Literal ID="litPageError" runat="server" />
+            <asp:Panel ID="pnlMessage" runat="server" Visible="false" CssClass="alert alert-error" role="alert">
+                <asp:Literal ID="litMessage" runat="server" />
             </asp:Panel>
 
-            <asp:Panel ID="pnlGuestNote" runat="server" Visible="false" CssClass="builder-guest-note">
-                <span>You can design freely. <a href="<%= ResolveUrl("~/Account/Login.aspx") %>?returnUrl=%2FPages%2FCustomBouquet.aspx">Sign in</a> when you are ready to add your bouquet to the bag.</span>
+            <asp:Panel ID="pnlUnavailable" runat="server" Visible="false" CssClass="empty-state">
+                <h2>The studio is being restocked</h2>
+                <p>The bouquet builder is not available right now. You can still browse our flowers in the shop.</p>
+                <div class="empty-actions"><a class="btn" href="<%= ResolveUrl("~/Pages/Shop.aspx") %>">Shop Flowers</a></div>
             </asp:Panel>
 
-            <div class="builder-layout">
+            <asp:Panel ID="pnlBuilder" runat="server">
+                <div id="bouquetBuilder" class="builder" data-delivery="<%= DeliveryFeeAttr %>">
 
-                <div class="builder-main">
+                    <!-- ============ Left: the three design steps ============ -->
+                    <div class="builder-main">
 
-                    <!-- STEP 01 : FLOWERS -->
-                    <div class="builder-block" id="stepFlowers">
-                        <div class="builder-heading">
-                            <span class="step-number">01</span>
-                            <div>
-                                <h2>Choose your flowers</h2>
-                                <p>Select as many varieties as you like, then set the number of stems for each.</p>
+                        <div class="builder-step">
+                            <div class="step-title"><span class="step-num">1</span><h2>Choose your flowers</h2></div>
+                            <p class="step-hint">Mix as many types as you like. Prices are per stem.</p>
+                            <asp:Literal ID="litFlowers" runat="server" />
+                        </div>
+
+                        <div class="builder-step">
+                            <div class="step-title"><span class="step-num">2</span><h2>Pick your wrapping</h2></div>
+                            <p class="step-hint">The paper your bouquet will be wrapped in.</p>
+                            <div class="option-grid">
+                                <asp:Literal ID="litWrapping" runat="server" />
                             </div>
                         </div>
 
-                        <div class="flower-options">
-                            <asp:Repeater ID="rptFlowers" runat="server">
-                                <ItemTemplate>
-                                    <article class="flower-option"
-                                             data-flower-id='<%# Eval("FlowerId") %>'
-                                             data-price='<%# Eval("PriceRaw") %>'
-                                             data-name='<%#: Eval("Name") %>'>
-                                        <label class="flower-check" title='<%#: "Include " + Eval("Name") %>'>
-                                            <input type="checkbox"
-                                                   class="flower-toggle"
-                                                   name='chk_<%# Eval("FlowerId") %>'
-                                                   value="1"
-                                                   aria-label='<%#: "Include " + Eval("Name") %>' />
-                                            <span class="check-ui" aria-hidden="true"></span>
-                                        </label>
-
-                                        <div class="flower-thumb">
-                                            <img src='<%# ResolveUrl((string)Eval("ImagePath")) %>' alt='<%#: Eval("Name") %>' loading="lazy" />
-                                        </div>
-
-                                        <div class="flower-meta">
-                                            <span class="flower-category"><%#: Eval("Category") %></span>
-                                            <h3><%#: Eval("Name") %></h3>
-                                            <span class="flower-price"><%#: Eval("PriceText") %> <small>/ stem</small></span>
-                                        </div>
-
-                                        <div class="qty-stepper" data-qty-for='<%# Eval("FlowerId") %>'>
-                                            <button type="button" class="qty-btn" data-step="-1" aria-label='<%#: "Decrease " + Eval("Name") + " quantity" %>'>&minus;</button>
-                                            <input type="number"
-                                                   class="qty-input"
-                                                   name='qty_<%# Eval("FlowerId") %>'
-                                                   value="0"
-                                                   min="0"
-                                                   max="50"
-                                                   inputmode="numeric"
-                                                   aria-label='<%#: Eval("Name") + " quantity" %>' />
-                                            <button type="button" class="qty-btn" data-step="1" aria-label='<%#: "Increase " + Eval("Name") + " quantity" %>'>+</button>
-                                        </div>
-                                    </article>
-                                </ItemTemplate>
-                            </asp:Repeater>
-                        </div>
-                    </div>
-
-                    <!-- STEP 02 : WRAPPING -->
-                    <div class="builder-block" id="stepWrapping">
-                        <div class="builder-heading">
-                            <span class="step-number">02</span>
-                            <div>
-                                <h2>Choose your wrapping</h2>
-                                <p>Every bouquet is wrapped by hand. Pick the paper that suits your moment.</p>
+                        <div class="builder-step">
+                            <div class="step-title"><span class="step-num">3</span><h2>Finish with a ribbon</h2></div>
+                            <p class="step-hint">The final touch that ties it all together.</p>
+                            <div class="option-grid">
+                                <asp:Literal ID="litRibbons" runat="server" />
                             </div>
                         </div>
-
-                        <div class="option-grid">
-                            <asp:Repeater ID="rptWrapping" runat="server">
-                                <ItemTemplate>
-                                    <label class="option-card">
-                                        <input type="radio"
-                                               name="wrappingId"
-                                               value='<%# Eval("WrappingId") %>'
-                                               data-price='<%# Eval("PriceRaw") %>'
-                                               data-name='<%#: Eval("Name") %>'
-                                               data-color='<%# Eval("PreviewColor") %>'
-                                               <%# Container.ItemIndex == 0 ? "checked=\"checked\"" : "" %> />
-                                        <span class="option-media">
-                                            <img src='<%# ResolveUrl((string)Eval("ImagePath")) %>' alt='<%#: Eval("Name") %>' loading="lazy" />
-                                        </span>
-                                        <span class="option-body">
-                                            <span class="option-title"><%#: Eval("Name") %></span>
-                                            <span class="option-desc"><%#: Eval("Description") %></span>
-                                            <span class="option-price"><%#: Eval("PriceText") %></span>
-                                        </span>
-                                        <span class="option-tick" aria-hidden="true"></span>
-                                    </label>
-                                </ItemTemplate>
-                            </asp:Repeater>
-                        </div>
                     </div>
 
-                    <!-- STEP 03 : RIBBON -->
-                    <div class="builder-block" id="stepRibbon">
-                        <div class="builder-heading">
-                            <span class="step-number">03</span>
-                            <div>
-                                <h2>Finish with a ribbon</h2>
-                                <p>The final detail. Choose the colour that ties the whole bouquet together.</p>
+                    <!-- ============ Right: preview, summary, total ============ -->
+                    <aside class="builder-side" aria-label="Your bouquet">
+                        <div class="side-card">
+                            <h2>Your Bouquet</h2>
+                            <p class="side-sub">A live preview of your design</p>
+
+                            <div class="bouquet-preview" aria-hidden="true">
+                                <div id="previewGreenery" class="bp-greenery" style="display:none;">
+                                    <svg viewBox="0 0 340 260" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
+                                        <g fill="#7E9675" opacity="0.82">
+                                            <path d="M170 210 C130 190 75 145 55 95 C65 100 80 96 84 86 C86 74 76 66 66 68 C56 72 46 84 46 98 C46 130 95 178 170 210 Z" />
+                                            <ellipse cx="74" cy="92" rx="16" ry="22" transform="rotate(-35 74 92)" />
+                                            <ellipse cx="96" cy="122" rx="18" ry="24" transform="rotate(-25 96 122)" />
+                                            <ellipse cx="122" cy="155" rx="19" ry="25" transform="rotate(-15 122 155)" />
+                                            <path d="M170 210 C210 190 265 145 285 95 C275 100 260 96 256 86 C254 74 264 66 274 68 C284 72 294 84 294 98 C294 130 245 178 170 210 Z" />
+                                            <ellipse cx="266" cy="92" rx="16" ry="22" transform="rotate(35 266 92)" />
+                                            <ellipse cx="244" cy="122" rx="18" ry="24" transform="rotate(25 244 122)" />
+                                            <ellipse cx="218" cy="155" rx="19" ry="25" transform="rotate(15 218 155)" />
+                                            <ellipse cx="148" cy="75" rx="12" ry="18" transform="rotate(-10 148 75)" opacity="0.6"/>
+                                            <ellipse cx="192" cy="75" rx="12" ry="18" transform="rotate(10 192 75)" opacity="0.6"/>
+                                        </g>
+                                    </svg>
+                                </div>
+                                <div id="previewFlowers" class="bp-flowers"></div>
+                                <p id="previewEmpty" class="bp-empty">
+                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="display:block;margin:0 auto 8px;opacity:0.6;"><circle cx="12" cy="12" r="10"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
+                                    Select flowers to start designing your custom bouquet.
+                                </p>
+                                <svg class="bp-wrap" viewBox="0 0 280 190" xmlns="http://www.w3.org/2000/svg">
+                                    <defs>
+                                        <filter id="bpDrop" x="-15%" y="-15%" width="130%" height="130%">
+                                            <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#4A3B39" flood-opacity="0.22"/>
+                                        </filter>
+                                        <linearGradient id="bpPaperShadow" x1="0" y1="0" x2="1" y2="0">
+                                            <stop offset="0%" stop-color="#000" stop-opacity="0.16"/>
+                                            <stop offset="35%" stop-color="#000" stop-opacity="0.0"/>
+                                            <stop offset="65%" stop-color="#fff" stop-opacity="0.14"/>
+                                            <stop offset="100%" stop-color="#000" stop-opacity="0.14"/>
+                                        </linearGradient>
+                                        <linearGradient id="bpRibbonShine" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stop-color="#fff" stop-opacity="0.3"/>
+                                            <stop offset="50%" stop-color="#000" stop-opacity="0.0"/>
+                                            <stop offset="100%" stop-color="#000" stop-opacity="0.22"/>
+                                        </linearGradient>
+                                    </defs>
+                                    <g filter="url(#bpDrop)">
+                                        <path class="bp-paper bp-back" fill="#F2C6D0" d="M30 35 L125 180 L140 180 L70 20 Z" opacity="0.88"/>
+                                        <path class="bp-paper bp-back" fill="#F2C6D0" d="M250 35 L155 180 L140 180 L210 20 Z" opacity="0.88"/>
+                                        <path id="bpPaper" class="bp-paper" fill="#F2C6D0" d="M20 40 Q140 65 260 40 L165 182 Q140 188 115 182 Z" />
+                                        <path fill="url(#bpPaperShadow)" d="M20 40 Q140 65 260 40 L165 182 Q140 188 115 182 Z" />
+                                        <path class="bp-paper bp-flap" fill="#F2C6D0" d="M20 40 C70 75 110 110 150 145 L135 184 L115 182 Z" />
+                                        <path fill="none" stroke="rgba(0,0,0,0.12)" stroke-width="1.5" d="M20 40 C70 75 110 110 150 145" />
+                                        <path class="bp-paper bp-flap" fill="#F2C6D0" d="M260 40 C200 80 155 115 125 150 L140 184 L165 182 Z" />
+                                        <path fill="none" stroke="rgba(0,0,0,0.15)" stroke-width="1.5" d="M260 40 C200 80 155 115 125 150" />
+                                        <path class="bp-ribbon" fill="#E39AAE" d="M102 112 Q140 118 178 112 L174 128 Q140 134 106 128 Z" />
+                                        <path fill="url(#bpRibbonShine)" d="M102 112 Q140 118 178 112 L174 128 Q140 134 106 128 Z" />
+                                        <path class="bp-ribbon" fill="#E39AAE" d="M136 126 C130 148 116 166 108 184 L120 180 L132 190 L140 128 Z" />
+                                        <path class="bp-ribbon" fill="#E39AAE" d="M144 126 C150 148 164 166 172 184 L160 180 L148 190 L140 128 Z" />
+                                        <path class="bp-ribbon" fill="#E39AAE" d="M140 120 C108 90 85 106 98 126 C110 140 134 128 140 120 Z" />
+                                        <path fill="url(#bpRibbonShine)" d="M140 120 C108 90 85 106 98 126 C110 140 134 128 140 120 Z" />
+                                        <path class="bp-ribbon" fill="#E39AAE" d="M140 120 C172 90 195 106 182 126 C170 140 146 128 140 120 Z" />
+                                        <path fill="url(#bpRibbonShine)" d="M140 120 C172 90 195 106 182 126 C170 140 146 128 140 120 Z" />
+                                        <ellipse class="bp-ribbon" cx="140" cy="120" rx="9" ry="11" fill="#E39AAE" />
+                                        <ellipse cx="140" cy="120" rx="9" ry="11" fill="url(#bpRibbonShine)" />
+                                    </g>
+                                </svg>
                             </div>
-                        </div>
 
-                        <div class="option-grid option-grid-ribbon">
-                            <asp:Repeater ID="rptRibbon" runat="server">
-                                <ItemTemplate>
-                                    <label class="option-card option-card-ribbon">
-                                        <input type="radio"
-                                               name="ribbonId"
-                                               value='<%# Eval("RibbonId") %>'
-                                               data-price='<%# Eval("PriceRaw") %>'
-                                               data-name='<%#: Eval("Name") %>'
-                                               data-color='<%# Eval("ColorHex") %>'
-                                               <%# Container.ItemIndex == 0 ? "checked=\"checked\"" : "" %> />
-                                        <span class="option-media">
-                                            <img src='<%# ResolveUrl((string)Eval("ImagePath")) %>' alt='<%#: Eval("Name") %>' loading="lazy" />
-                                        </span>
-                                        <span class="option-body">
-                                            <span class="option-title"><%#: Eval("Name") %></span>
-                                            <span class="option-desc"><%#: Eval("Description") %></span>
-                                            <span class="option-price"><%#: Eval("PriceText") %></span>
-                                        </span>
-                                        <span class="option-tick" aria-hidden="true"></span>
-                                    </label>
-                                </ItemTemplate>
-                            </asp:Repeater>
+                            <h4>Summary</h4>
+                            <ul id="summaryList" class="summary-list"><li class="summary-empty">No flowers chosen yet</li></ul>
+
+                            <div class="totals">
+                                <div class="row"><span>Flower cost</span><span id="totFlowers">&#8377;0.00</span></div>
+                                <div class="row"><span>Wrapping</span><span id="totWrapping">&#8377;0.00</span></div>
+                                <div class="row"><span>Ribbon</span><span id="totRibbon">&#8377;0.00</span></div>
+                                <div class="row"><span>Subtotal</span><span id="totSubtotal">&#8377;0.00</span></div>
+                                <div class="row"><span>Delivery fee</span><span id="totDelivery">&#8377;0.00</span></div>
+                                <div class="row grand"><span>Estimated total</span><span id="totGrand">&#8377;0.00</span></div>
+                            </div>
+
+                            <asp:Button ID="btnAddBouquet" runat="server" ClientIDMode="Static" Text="Add Bouquet to Cart"
+                                CssClass="btn btn-block" OnClick="btnAddBouquet_Click" />
+                            <p id="builderHint" class="estimate-note" role="status">Choose at least one flower, a wrapping paper and a ribbon.</p>
+                            <p class="estimate-note">Estimate only. Your final price is confirmed from our catalogue when you add to cart.</p>
                         </div>
-                    </div>
+                    </aside>
 
                 </div>
+            </asp:Panel>
 
-                <!-- LIVE PREVIEW + SUMMARY -->
-                <aside class="builder-aside">
-                    <div class="builder-sticky">
-
-                        <div class="preview-card">
-                            <div class="preview-stage" id="bouquetPreview">
-                                <span class="preview-label">Live preview</span>
-                                <div class="preview-glow" aria-hidden="true"></div>
-                                <div class="preview-wrap" id="previewWrap" aria-hidden="true"></div>
-
-                                <div class="preview-blooms">
-                                    <asp:Repeater ID="rptPreview" runat="server">
-                                        <ItemTemplate>
-                                            <div class="preview-bloom" data-preview-id='<%# Eval("FlowerId") %>'>
-                                                <img src='<%# ResolveUrl((string)Eval("ImagePath")) %>' alt="" />
-                                                <span class="preview-qty"></span>
-                                            </div>
-                                        </ItemTemplate>
-                                    </asp:Repeater>
-                                </div>
-
-                                <div class="preview-bow" id="previewBow" aria-hidden="true">
-                                    <span class="bow-loop bow-loop-left"></span>
-                                    <span class="bow-loop bow-loop-right"></span>
-                                    <span class="bow-knot"></span>
-                                    <span class="bow-tail bow-tail-left"></span>
-                                    <span class="bow-tail bow-tail-right"></span>
-                                </div>
-
-                                <p class="preview-empty" id="previewEmpty">Your bouquet starts with a single stem.</p>
-                            </div>
-                            <div class="preview-caption">
-                                <span id="previewCaption">Nothing selected yet</span>
-                                <span>Made by you</span>
-                            </div>
-                        </div>
-
-                        <div class="summary-card">
-                            <div class="summary-head">
-                                <div>
-                                    <span class="eyebrow">Your bouquet</span>
-                                    <h2>Live estimate</h2>
-                                </div>
-                                <span class="summary-stems" id="summaryStems">0 stems</span>
-                            </div>
-
-                            <ul class="summary-lines" id="summaryFlowers">
-                                <li class="summary-empty" id="summaryEmpty">No flowers selected yet.</li>
-                            </ul>
-
-                            <dl class="summary-totals">
-                                <div><dt>Flowers</dt><dd id="sumFlowers">&#8377;0</dd></div>
-                                <div><dt>Wrapping</dt><dd id="sumWrapping">&mdash;</dd></div>
-                                <div><dt>Ribbon</dt><dd id="sumRibbon">&mdash;</dd></div>
-                                <div><dt>Delivery</dt><dd id="sumDelivery">&#8377;149</dd></div>
-                                <div class="summary-grand"><dt>Estimated total</dt><dd id="sumGrand">&#8377;149</dd></div>
-                            </dl>
-
-                            <p class="summary-note" id="deliveryNote">Add &#8377;2,000 of flowers for complimentary delivery.</p>
-
-                            <asp:Panel ID="pnlBuilderError" runat="server" Visible="false" CssClass="form-error">
-                                <asp:Literal ID="litBuilderError" runat="server" />
-                            </asp:Panel>
-
-                            <asp:Button ID="btnAddBouquet" runat="server"
-                                        CssClass="btn btn-primary btn-block"
-                                        Text="Add bouquet to bag"
-                                        OnClick="btnAddBouquet_Click" />
-
-                            <p class="summary-fineprint">
-                                Your final price is recalculated securely on our server before checkout.
-                            </p>
-                        </div>
-
-                    </div>
-                </aside>
-
-            </div>
         </div>
     </section>
 

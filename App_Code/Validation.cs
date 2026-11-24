@@ -4,49 +4,26 @@ using System.Text.RegularExpressions;
 
 namespace BloomSpace
 {
-    /// <summary>Server-side validation used by the account, cart and contact pages.</summary>
+    /// <summary>Server-side validation rules used by every form. Never rely on browser checks alone.</summary>
     public static class Validation
     {
-        private static readonly Regex PhonePattern =
-            new Regex(@"^[6-9]\d{9}$", RegexOptions.Compiled);
-
-        private static readonly Regex NamePattern =
-            new Regex(@"^[A-Za-z][A-Za-z .'\-]{1,99}$", RegexOptions.Compiled);
-
-        private static readonly Regex HasLetter =
-            new Regex(@"[A-Za-z]", RegexOptions.Compiled);
-
-        private static readonly Regex HasDigit =
-            new Regex(@"\d", RegexOptions.Compiled);
+        private static readonly Regex NameRx = new Regex(@"^[\p{L}][\p{L} .'\-]{1,99}$", RegexOptions.Compiled);
+        private static readonly Regex PhoneRx = new Regex(@"^(?:\+?91|0)?([6-9]\d{9})$", RegexOptions.Compiled);
 
         public static bool IsValidName(string value)
         {
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return false;
-            }
-
-            return NamePattern.IsMatch(value.Trim());
+            if (string.IsNullOrWhiteSpace(value)) return false;
+            return NameRx.IsMatch(value.Trim());
         }
 
         public static bool IsValidEmail(string value)
         {
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return false;
-            }
-
-            string email = value.Trim();
-
-            if (email.Length > 150 || email.Contains(" "))
-            {
-                return false;
-            }
-
+            if (string.IsNullOrWhiteSpace(value) || value.Length > 256) return false;
             try
             {
-                MailAddress address = new MailAddress(email);
-                return string.Equals(address.Address, email, StringComparison.OrdinalIgnoreCase);
+                MailAddress address = new MailAddress(value);
+                int at = value.IndexOf('@');
+                return address.Address == value && at > 0 && value.IndexOf('.', at) > at;
             }
             catch (FormatException)
             {
@@ -54,59 +31,33 @@ namespace BloomSpace
             }
         }
 
-        /// <summary>Normalises +91 / spaces / dashes, then checks for a 10-digit Indian mobile.</summary>
+        /// <summary>Returns a clean 10-digit Indian mobile number, or null if the input is not valid.</summary>
         public static string NormalizePhone(string value)
         {
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return string.Empty;
-            }
-
-            string digits = Regex.Replace(value, @"[^\d]", string.Empty);
-
-            if (digits.StartsWith("91", StringComparison.Ordinal) && digits.Length == 12)
-            {
-                digits = digits.Substring(2);
-            }
-
-            if (digits.StartsWith("0", StringComparison.Ordinal) && digits.Length == 11)
-            {
-                digits = digits.Substring(1);
-            }
-
-            return digits;
+            if (string.IsNullOrWhiteSpace(value)) return null;
+            string digits = Regex.Replace(value, @"[\s\-()]", "");
+            Match m = PhoneRx.Match(digits);
+            return m.Success ? m.Groups[1].Value : null;
         }
 
-        public static bool IsValidPhone(string value)
+        /// <summary>Returns a friendly message if the password is too weak, otherwise null.</summary>
+        public static string PasswordProblem(string password)
         {
-            string phone = NormalizePhone(value);
-            return PhonePattern.IsMatch(phone);
-        }
-
-        public static bool IsValidPassword(string password)
-        {
-            return !string.IsNullOrEmpty(password) &&
-                   password.Length >= 8 &&
-                   password.Length <= 128 &&
-                   HasLetter.IsMatch(password) &&
-                   HasDigit.IsMatch(password);
+            if (string.IsNullOrEmpty(password)) return "Please enter a password.";
+            if (password.Length < 8) return "Your password must be at least 8 characters long.";
+            if (password.Length > 100) return "Your password is too long (maximum 100 characters).";
+            if (!Regex.IsMatch(password, @"[A-Za-z]") || !Regex.IsMatch(password, @"\d"))
+            {
+                return "Your password must contain at least one letter and one number.";
+            }
+            return null;
         }
 
         public static bool IsValidAddress(string value)
         {
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return false;
-            }
-
-            int length = value.Trim().Length;
-            return length >= 10 && length <= 500;
-        }
-
-        public static bool IsValidDeliveryDate(DateTime date)
-        {
-            DateTime today = DateTime.Today;
-            return date.Date >= today.AddDays(1) && date.Date <= today.AddDays(30);
+            if (string.IsNullOrWhiteSpace(value)) return false;
+            int len = value.Trim().Length;
+            return len >= 10 && len <= 500;
         }
     }
 }

@@ -1,97 +1,112 @@
 using System;
+using System.Data.SqlClient;
 using System.Web;
-using System.Web.UI;
+using BloomSpace;
 
-namespace BloomSpace.Account
+public partial class Account_Register : System.Web.UI.Page
 {
-    public partial class RegisterPage : BloomPage
+    protected void Page_Load(object sender, EventArgs e)
     {
-        public string LoginUrl
+        if (!IsPostBack && AuthHelper.IsLoggedIn)
         {
-            get
-            {
-                string url = ResolveUrl("~/Account/Login.aspx");
-                string returnUrl = Request.QueryString["returnUrl"];
+            Response.Redirect("~/Pages/Home.aspx");
+        }
+    }
 
-                if (!string.IsNullOrWhiteSpace(returnUrl))
-                {
-                    url += "?returnUrl=" + HttpUtility.UrlEncode(returnUrl);
-                }
+    protected void btnRegister_Click(object sender, EventArgs e)
+    {
+        string name = (txtName.Text ?? "").Trim();
+        string email = (txtEmail.Text ?? "").Trim().ToLowerInvariant();
+        string phone = Validation.NormalizePhone(txtPhone.Text);
+        string password = txtPassword.Text ?? "";
+        string confirm = txtConfirm.Text ?? "";
 
-                return url;
-            }
+        // ---- Server-side validation ----
+        if (!Validation.IsValidName(name))
+        {
+            ShowError("Please enter your full name (letters only, at least 2 characters).");
+            return;
+        }
+        if (!Validation.IsValidEmail(email))
+        {
+            ShowError("Please enter a valid email address.");
+            return;
+        }
+        if (phone == null)
+        {
+            ShowError("Please enter a valid 10-digit Indian mobile number.");
+            return;
+        }
+        string passwordProblem = Validation.PasswordProblem(password);
+        if (passwordProblem != null)
+        {
+            ShowError(passwordProblem);
+            return;
+        }
+        if (password != confirm)
+        {
+            ShowError("The two passwords do not match.");
+            return;
         }
 
-        protected void Page_Load(object sender, EventArgs e)
+        try
         {
-            if (Auth.IsLoggedIn)
+            // Friendly early check (the UNIQUE constraint below is the real guarantee).
+            object existing = Db.Scalar("SELECT COUNT(*) FROM dbo.Users WHERE Email = @e", Db.P("@e", email));
+            if (Convert.ToInt32(existing) > 0)
             {
-                Response.Redirect("~/Pages/Home.aspx", false);
-                Context.ApplicationInstance.CompleteRequest();
+                ShowError("An account with this email already exists. Try logging in instead.");
                 return;
             }
-        }
 
-        protected void btnRegister_Click(object sender, EventArgs e)
+            string hash, salt;
+            int iterations;
+            PasswordHasher.Hash(password, out hash, out salt, out iterations);
+
+            int newUserId;
+            using (SqlConnection con = Db.Open())
+            using (SqlCommand cmd = new SqlCommand(
+                @"INSERT INTO dbo.Users (FullName, Email, Phone, PasswordHash, PasswordSalt, Iterations)
+                  OUTPUT INSERTED.UserId
+                  VALUES (@n, @e, @p, @h, @s, @i)", con))
+            {
+                cmd.Parameters.AddWithValue("@n", name);
+                cmd.Parameters.AddWithValue("@e", email);
+                cmd.Parameters.AddWithValue("@p", phone);
+                cmd.Parameters.AddWithValue("@h", hash);
+                cmd.Parameters.AddWithValue("@s", salt);
+                cmd.Parameters.AddWithValue("@i", iterations);
+                newUserId = Convert.ToInt32(cmd.ExecuteScalar());
+            }
+
+            AuthHelper.SignIn(newUserId, name);
+            string target = AuthHelper.SafeReturnUrl(Request.QueryString["returnUrl"], ResolveUrl("~/Pages/Home.aspx"));
+            Response.Redirect(target, false);
+            Context.ApplicationInstance.CompleteRequest();
+        }
+        catch (SqlException ex)
         {
-            string email = (txtEmail.Text ?? string.Empty).Trim();
-
-            try
+            // 2627 / 2601 = duplicate key: two people registered the same email at the same moment.
+            if (ex.Number == 2627 || ex.Number == 2601)
             {
-                string error = AccountService.Register(
-                    txtFullName.Text,
-                    email,
-                    txtPhone.Text,
-                    txtPassword.Text,
-                    txtConfirmPassword.Text);
-
-                if (error != null)
-                {
-                    ShowError(error);
-                    txtPassword.Text = string.Empty;
-                    txtConfirmPassword.Text = string.Empty;
-                    return;
-                }
-
-                // Sign the new customer in straight away.
-                UserRecord user = AccountService.Authenticate(email, txtPassword.Text);
-
-                if (user == null)
-                {
-                    Response.Redirect("~/Account/Login.aspx?registered=1", false);
-                    Context.ApplicationInstance.CompleteRequest();
-                    return;
-                }
-
-                Auth.SignIn(user.UserId, user.FullName, user.Email);
-
-                string target = Auth.SafeReturnUrl(
-                    Request.QueryString["returnUrl"],
-                    "~/Pages/Home.aspx");
-
-                if (target == "~/Pages/Home.aspx")
-                {
-                    target += "?welcome=1";
-                }
-
-                Response.Redirect(target, false);
-                Context.ApplicationInstance.CompleteRequest();
+                ShowError("An account with this email already exists. Try logging in instead.");
             }
-            catch (System.Threading.ThreadAbortException)
+            else
             {
-                throw;
-            }
-            catch (Exception exception)
-            {
-                Logger.Log(exception);
-                ShowError("We could not create your account right now. Please try again.");
+                ErrorLog.Write(ex);
+                ShowError("Sorry, we could not create your account right now. Please try again in a moment.");
             }
         }
-
-        private void ShowError(string message)
+        catch (Exception ex)
         {
-            pnlError.Visible = true;
-            litError.Text = Server.HtmlEncode(message);
+            ErrorLog.Write(ex);
+            ShowError("Sorry, we could not create your account right now. Please try again in a moment.");
         }
+    }
+
+    private void ShowError(string message)
+    {
+        litMessage.Text = HttpUtility.HtmlEncode(message);
+        pnlMessage.Visible = true;
     }
 }

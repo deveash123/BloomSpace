@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <defs>
+    <linearGradient id="pinkSatin" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FCECEF" />
+      <stop offset="35%" stop-color="#E89CB0" />
+      <stop offset="70%" stop-color="#D97F98" />
+      <stop offset="100%" stop-color="#BF617C" />
+    </linearGradient>
+    <filter id="ribbonShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#592A37" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+  <rect width="400" height="400" fill="#FAF5F3" />
+  <path d="M-20 160 L420 160 L420 240 L-20 240 Z" fill="url(#pinkSatin)" opacity="0.9" />
+  <g filter="url(#ribbonShadow)">
+    <path d="M200 200 C120 100 60 130 90 200 C110 245 170 235 200 200 Z" fill="url(#pinkSatin)" />
+    <path d="M200 200 C280 100 340 130 310 200 C290 245 230 235 200 200 Z" fill="url(#pinkSatin)" />
+    <path d="M185 210 C175 260 145 315 130 350 L160 340 L185 365 L200 215 Z" fill="url(#pinkSatin)" />
+    <path d="M215 210 C225 260 255 315 270 350 L240 340 L215 365 L200 215 Z" fill="url(#pinkSatin)" />
+    <ellipse cx="200" cy="200" rx="20" ry="24" fill="url(#pinkSatin)" stroke="rgba(255,255,255,0.4)" stroke-width="1.5" />
+  </g>
+</svg>

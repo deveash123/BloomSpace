@@ -5,251 +5,285 @@ using System.Data.SqlClient;
 
 namespace BloomSpace
 {
-    /// <summary>
-    /// Order creation and retrieval.
-    /// The order header and every order line are written inside one SQL
-    /// transaction: either the whole order is saved, or nothing is.
-    /// Prices are recalculated from the catalogue first and then copied into
-    /// OrderDetails as historical snapshots.
-    /// </summary>
+    public class OrderLine
+    {
+        public int FlowerId { get; set; }
+        public int? BouquetNo { get; set; }
+        public string FlowerName { get; set; }
+        public decimal UnitPrice { get; set; }
+        public int Quantity { get; set; }
+        public string WrappingName { get; set; }
+        public decimal WrappingPrice { get; set; }
+        public string RibbonName { get; set; }
+        public decimal RibbonPrice { get; set; }
+        public decimal LineTotal { get; set; }
+    }
+
+    public class OrderInfo
+    {
+        public OrderInfo() { Lines = new List<OrderLine>(); }
+
+        public int OrderId { get; set; }
+        public string CustomerName { get; set; }
+        public string Phone { get; set; }
+        public string DeliveryAddress { get; set; }
+        public DateTime DeliveryDate { get; set; }
+        public decimal Subtotal { get; set; }
+        public decimal DeliveryFee { get; set; }
+        public decimal TotalAmount { get; set; }
+        public string Status { get; set; }
+        public DateTime OrderedAt { get; set; }
+        public List<OrderLine> Lines { get; private set; }
+    }
+
+    /// <summary>Creates and reads orders.</summary>
     public static class OrderService
     {
-        public static int PlaceOrder(
-            int userId,
-            string customerName,
-            string phone,
-            string address,
-            DateTime deliveryDate,
-            out string error)
+        /// <summary>
+        /// Turns the user's cart into an order inside ONE SQL transaction:
+        ///   1. re-read the cart and recalculate all prices from the database,
+        ///   2. insert the Orders row,
+        ///   3. insert one OrderDetails row per cart row (price snapshots),
+        ///   4. empty the cart.
+        /// If anything fails, everything is rolled back. Returns the new OrderId, or 0 with a friendly error.
+        /// </summary>
+        public static int PlaceOrder(int userId, string customerName, string phone, string address, DateTime deliveryDate, out string error)
         {
             error = null;
 
-            if (userId <= 0)
-            {
-                error = "Please sign in to place your order.";
-                return 0;
-            }
-
-            customerName = (customerName ?? string.Empty).Trim();
-            phone = Validation.NormalizePhone(phone);
-            address = (address ?? string.Empty).Trim();
-
-            if (!Validation.IsValidName(customerName))
-            {
-                error = "Please enter your full name (letters, spaces, apostrophes or hyphens).";
-                return 0;
-            }
-
-            if (!Validation.IsValidPhone(phone))
-            {
-                error = "Please enter a valid 10-digit Indian mobile number.";
-                return 0;
-            }
-
-            if (!Validation.IsValidAddress(address))
-            {
-                error = "Please enter a complete delivery address (at least 10 characters).";
-                return 0;
-            }
-
-            if (!Validation.IsValidDeliveryDate(deliveryDate))
-            {
-                error = "Please choose a delivery date between tomorrow and 30 days from today.";
-                return 0;
-            }
-
-            CartSummary cart = CartService.GetCart(userId);
-
-            if (cart.Lines.Count == 0)
-            {
-                error = "Your bag is empty. Add a bouquet before checking out.";
-                return 0;
-            }
-
-            if (cart.HasInvalidLines)
-            {
-                error = "Some items in your bag are no longer available. Please remove them before checking out.";
-                return 0;
-            }
-
-            if (cart.Subtotal <= 0m)
-            {
-                error = "Your bag is empty. Add a bouquet before checking out.";
-                return 0;
-            }
-
-            using (SqlConnection connection = Db.OpenConnection())
-            using (SqlTransaction transaction = connection.BeginTransaction())
+            using (SqlConnection con = Db.Open())
+            using (SqlTransaction tx = con.BeginTransaction())
             {
                 try
                 {
+                    // 1. Refuse the order if anything in the cart was withdrawn from sale.
+                    const string availSql = @"
+SELECT COUNT(*) FROM dbo.Cart c
+INNER JOIN dbo.Flowers f ON f.FlowerId = c.FlowerId
+LEFT JOIN dbo.WrappingSheets w ON w.WrappingId = c.WrappingId
+LEFT JOIN dbo.Ribbons r ON r.RibbonId = c.RibbonId
+WHERE c.UserId = @u AND (f.IsActive = 0 OR w.IsActive = 0 OR r.IsActive = 0);";
+                    using (SqlCommand chk = new SqlCommand(availSql, con, tx))
+                    {
+                        chk.Parameters.AddWithValue("@u", userId);
+                        if (Convert.ToInt32(chk.ExecuteScalar()) > 0)
+                        {
+                            tx.Rollback();
+                            error = "Some items in your cart are no longer available. Please review your cart and try again.";
+                            return 0;
+                        }
+                    }
+
+                    // 2. Server-side price calculation (the browser's numbers are never used).
+                    CartSummary cart = CartService.Load(con, tx, userId);
+                    if (cart.IsEmpty)
+                    {
+                        tx.Rollback();
+                        error = "Your cart is empty.";
+                        return 0;
+                    }
+
+                    // 3. Orders row.
+                    const string orderSql = @"
+INSERT INTO dbo.Orders (UserId, CustomerName, Phone, DeliveryAddress, DeliveryDate, Subtotal, DeliveryFee, TotalAmount, Status)
+OUTPUT INSERTED.OrderId
+VALUES (@u, @name, @phone, @addr, @date, @sub, @fee, @total, N'Placed');";
+
                     int orderId;
-
-                    const string orderSql =
-                        @"INSERT INTO dbo.Orders
-                              (UserId, CustomerName, Phone, DeliveryAddress, DeliveryDate,
-                               FlowerSubtotal, DeliveryFee, GrandTotal, Status)
-                          VALUES
-                              (@UserId, @CustomerName, @Phone, @DeliveryAddress, @DeliveryDate,
-                               @FlowerSubtotal, @DeliveryFee, @GrandTotal, N'Confirmed');
-
-                          SELECT CAST(SCOPE_IDENTITY() AS INT);";
-
-                    using (SqlCommand command = new SqlCommand(orderSql, connection, transaction))
+                    using (SqlCommand cmd = new SqlCommand(orderSql, con, tx))
                     {
-                        command.Parameters.AddWithValue("@UserId", userId);
-                        command.Parameters.AddWithValue("@CustomerName", customerName);
-                        command.Parameters.AddWithValue("@Phone", phone);
-                        command.Parameters.AddWithValue("@DeliveryAddress", address);
-                        command.Parameters.AddWithValue("@DeliveryDate", deliveryDate.Date);
-                        command.Parameters.AddWithValue("@FlowerSubtotal", cart.Subtotal);
-                        command.Parameters.AddWithValue("@DeliveryFee", cart.DeliveryFee);
-                        command.Parameters.AddWithValue("@GrandTotal", cart.GrandTotal);
-
-                        orderId = Convert.ToInt32(command.ExecuteScalar());
+                        cmd.Parameters.AddWithValue("@u", userId);
+                        cmd.Parameters.AddWithValue("@name", customerName);
+                        cmd.Parameters.AddWithValue("@phone", phone);
+                        cmd.Parameters.AddWithValue("@addr", address);
+                        cmd.Parameters.AddWithValue("@date", deliveryDate.Date);
+                        AddMoney(cmd, "@sub", cart.Subtotal);
+                        AddMoney(cmd, "@fee", cart.DeliveryFee);
+                        AddMoney(cmd, "@total", cart.Total);
+                        orderId = Convert.ToInt32(cmd.ExecuteScalar());
                     }
 
-                    const string detailSql =
-                        @"INSERT INTO dbo.OrderDetails
-                              (OrderId, FlowerId, ItemName, Quantity, UnitPrice,
-                               WrappingName, WrappingPrice, RibbonName, RibbonPrice, LineTotal)
-                          VALUES
-                              (@OrderId, @FlowerId, @ItemName, @Quantity, @UnitPrice,
-                               @WrappingName, @WrappingPrice, @RibbonName, @RibbonPrice, @LineTotal);";
+                    // 4. OrderDetails rows (snapshots of name and price).
+                    const string detailSql = @"
+INSERT INTO dbo.OrderDetails (OrderId, FlowerId, BouquetNo, FlowerName, UnitPrice, Quantity,
+                              WrappingName, WrappingPrice, RibbonName, RibbonPrice, LineTotal)
+VALUES (@o, @f, @bn, @fname, @price, @qty, @wname, @wprice, @rname, @rprice, @line);";
 
-                    foreach (CartLine line in cart.Lines)
+                    int bouquetNo = 0;
+                    decimal detailSum = 0m;
+                    foreach (CartGroup g in cart.Groups)
                     {
-                        string itemName = line.IsCustom
-                            ? "Custom Bouquet - " + line.Description
-                            : line.Title;
+                        if (g.IsBouquet) bouquetNo++;
 
-                        if (itemName.Length > 300)
+                        for (int i = 0; i < g.Items.Count; i++)
                         {
-                            itemName = itemName.Substring(0, 297) + "...";
-                        }
+                            CartItem item = g.Items[i];
 
-                        using (SqlCommand command = new SqlCommand(detailSql, connection, transaction))
-                        {
-                            command.Parameters.AddWithValue("@OrderId", orderId);
-                            command.Parameters.AddWithValue(
-                                "@FlowerId",
-                                line.IsCustom || !line.FlowerId.HasValue
-                                    ? (object)DBNull.Value
-                                    : line.FlowerId.Value);
-                            command.Parameters.AddWithValue("@ItemName", itemName);
-                            command.Parameters.AddWithValue("@Quantity", line.Quantity);
-                            command.Parameters.AddWithValue("@UnitPrice", line.FlowerCost);
-                            command.Parameters.AddWithValue(
-                                "@WrappingName",
-                                (object)line.WrappingName ?? DBNull.Value);
-                            command.Parameters.AddWithValue("@WrappingPrice", line.WrappingPrice);
-                            command.Parameters.AddWithValue(
-                                "@RibbonName",
-                                (object)line.RibbonName ?? DBNull.Value);
-                            command.Parameters.AddWithValue("@RibbonPrice", line.RibbonPrice);
-                            command.Parameters.AddWithValue("@LineTotal", line.LineTotal);
+                            // Wrapping and ribbon are charged once per bouquet -> only on its first row.
+                            decimal wPrice = (g.IsBouquet && i == 0) ? g.WrappingPrice : 0m;
+                            decimal rPrice = (g.IsBouquet && i == 0) ? g.RibbonPrice : 0m;
+                            decimal line = item.UnitPrice * item.Quantity + wPrice + rPrice;
+                            detailSum += line;
 
-                            command.ExecuteNonQuery();
+                            using (SqlCommand cmd = new SqlCommand(detailSql, con, tx))
+                            {
+                                cmd.Parameters.AddWithValue("@o", orderId);
+                                cmd.Parameters.AddWithValue("@f", item.FlowerId);
+                                cmd.Parameters.AddWithValue("@bn", g.IsBouquet ? (object)bouquetNo : DBNull.Value);
+                                cmd.Parameters.AddWithValue("@fname", item.FlowerName);
+                                AddMoney(cmd, "@price", item.UnitPrice);
+                                cmd.Parameters.AddWithValue("@qty", item.Quantity);
+                                cmd.Parameters.AddWithValue("@wname", g.IsBouquet ? (object)g.WrappingName : DBNull.Value);
+                                AddMoney(cmd, "@wprice", wPrice);
+                                cmd.Parameters.AddWithValue("@rname", g.IsBouquet ? (object)g.RibbonName : DBNull.Value);
+                                AddMoney(cmd, "@rprice", rPrice);
+                                AddMoney(cmd, "@line", line);
+                                cmd.ExecuteNonQuery();
+                            }
                         }
                     }
 
-                    using (SqlCommand command = new SqlCommand(
-                        "DELETE FROM dbo.Cart WHERE UserId = @UserId",
-                        connection,
-                        transaction))
+                    // Safety net: the saved details must add up to the saved subtotal.
+                    if (detailSum != cart.Subtotal)
                     {
-                        command.Parameters.AddWithValue("@UserId", userId);
-                        command.ExecuteNonQuery();
+                        throw new InvalidOperationException("Order detail total does not match the subtotal.");
                     }
 
-                    transaction.Commit();
+                    // 5. Empty the cart.
+                    using (SqlCommand cmd = new SqlCommand("DELETE FROM dbo.Cart WHERE UserId = @u", con, tx))
+                    {
+                        cmd.Parameters.AddWithValue("@u", userId);
+                        cmd.ExecuteNonQuery();
+                    }
+
+                    tx.Commit();
                     return orderId;
                 }
-                catch
+                catch (Exception ex)
                 {
-                    try
-                    {
-                        transaction.Rollback();
-                    }
-                    catch
-                    {
-                        // The original exception is more useful than a rollback failure.
-                    }
-
-                    throw;
+                    try { tx.Rollback(); } catch (Exception) { /* already rolled back */ }
+                    ErrorLog.Write(ex);
+                    error = "We could not place your order right now. Please try again in a moment.";
+                    return 0;
                 }
             }
         }
 
-        /// <summary>
-        /// Loads an order only when it belongs to the signed-in customer.
-        /// Returns null when the order does not exist or belongs to someone else.
-        /// </summary>
-        public static OrderView GetOrder(int orderId, int userId)
+        /// <summary>Adds a money value as DECIMAL(10,2) so ADO.NET never guesses the precision.</summary>
+        private static void AddMoney(SqlCommand cmd, string name, decimal value)
         {
-            if (orderId <= 0 || userId <= 0)
+            SqlParameter p = new SqlParameter(name, SqlDbType.Decimal);
+            p.Precision = 10;
+            p.Scale = 2;
+            p.Value = value;
+            cmd.Parameters.Add(p);
+        }
+
+        /// <summary>Loads an order. Returns null if it does not exist OR belongs to another user.</summary>
+        public static OrderInfo GetOrder(int orderId, int userId)
+        {
+            DataTable head = Db.Table(
+                @"SELECT OrderId, CustomerName, Phone, DeliveryAddress, DeliveryDate, Subtotal, DeliveryFee, TotalAmount, Status, OrderedAt
+                  FROM dbo.Orders WHERE OrderId = @o AND UserId = @u",
+                Db.P("@o", orderId), Db.P("@u", userId));
+            if (head.Rows.Count == 0) return null;
+
+            DataRow h = head.Rows[0];
+            OrderInfo info = new OrderInfo();
+            info.OrderId = (int)h["OrderId"];
+            info.CustomerName = (string)h["CustomerName"];
+            info.Phone = (string)h["Phone"];
+            info.DeliveryAddress = (string)h["DeliveryAddress"];
+            info.DeliveryDate = (DateTime)h["DeliveryDate"];
+            info.Subtotal = (decimal)h["Subtotal"];
+            info.DeliveryFee = (decimal)h["DeliveryFee"];
+            info.TotalAmount = (decimal)h["TotalAmount"];
+            info.Status = (string)h["Status"];
+            info.OrderedAt = (DateTime)h["OrderedAt"];
+
+            DataTable lines = Db.Table(
+                @"SELECT FlowerId, BouquetNo, FlowerName, UnitPrice, Quantity, WrappingName, WrappingPrice, RibbonName, RibbonPrice, LineTotal
+                  FROM dbo.OrderDetails WHERE OrderId = @o ORDER BY OrderDetailId",
+                Db.P("@o", orderId));
+            foreach (DataRow r in lines.Rows)
             {
-                return null;
+                OrderLine l = new OrderLine();
+                l.FlowerId = (int)r["FlowerId"];
+                l.BouquetNo = r.IsNull("BouquetNo") ? (int?)null : (int)r["BouquetNo"];
+                l.FlowerName = (string)r["FlowerName"];
+                l.UnitPrice = (decimal)r["UnitPrice"];
+                l.Quantity = (int)r["Quantity"];
+                l.WrappingName = r.IsNull("WrappingName") ? "" : (string)r["WrappingName"];
+                l.WrappingPrice = (decimal)r["WrappingPrice"];
+                l.RibbonName = r.IsNull("RibbonName") ? "" : (string)r["RibbonName"];
+                l.RibbonPrice = (decimal)r["RibbonPrice"];
+                l.LineTotal = (decimal)r["LineTotal"];
+                info.Lines.Add(l);
+            }
+            return info;
+        }
+
+        /// <summary>Loads all orders placed by the user, newest first, including all line items.</summary>
+        public static List<OrderInfo> GetOrdersForUser(int userId)
+        {
+            DataTable head = Db.Table(
+                @"SELECT OrderId, CustomerName, Phone, DeliveryAddress, DeliveryDate, Subtotal, DeliveryFee, TotalAmount, Status, OrderedAt
+                  FROM dbo.Orders WHERE UserId = @u ORDER BY OrderId DESC",
+                Db.P("@u", userId));
+
+            List<OrderInfo> list = new List<OrderInfo>();
+            if (head.Rows.Count == 0) return list;
+
+            DataTable lines = Db.Table(
+                @"SELECT od.OrderId, od.FlowerId, od.BouquetNo, od.FlowerName, od.UnitPrice, od.Quantity,
+                         od.WrappingName, od.WrappingPrice, od.RibbonName, od.RibbonPrice, od.LineTotal
+                  FROM dbo.OrderDetails od
+                  INNER JOIN dbo.Orders o ON o.OrderId = od.OrderId
+                  WHERE o.UserId = @u
+                  ORDER BY od.OrderId DESC, od.OrderDetailId",
+                Db.P("@u", userId));
+
+            Dictionary<int, List<OrderLine>> lineMap = new Dictionary<int, List<OrderLine>>();
+            foreach (DataRow r in lines.Rows)
+            {
+                int oId = (int)r["OrderId"];
+                if (!lineMap.ContainsKey(oId)) lineMap[oId] = new List<OrderLine>();
+
+                OrderLine l = new OrderLine();
+                l.FlowerId = (int)r["FlowerId"];
+                l.BouquetNo = r.IsNull("BouquetNo") ? (int?)null : (int)r["BouquetNo"];
+                l.FlowerName = (string)r["FlowerName"];
+                l.UnitPrice = (decimal)r["UnitPrice"];
+                l.Quantity = (int)r["Quantity"];
+                l.WrappingName = r.IsNull("WrappingName") ? "" : (string)r["WrappingName"];
+                l.WrappingPrice = (decimal)r["WrappingPrice"];
+                l.RibbonName = r.IsNull("RibbonName") ? "" : (string)r["RibbonName"];
+                l.RibbonPrice = (decimal)r["RibbonPrice"];
+                l.LineTotal = (decimal)r["LineTotal"];
+                lineMap[oId].Add(l);
             }
 
-            DataTable orderTable = Db.GetDataTable(
-                @"SELECT OrderId, CustomerName, Phone, DeliveryAddress, DeliveryDate,
-                         FlowerSubtotal, DeliveryFee, GrandTotal, Status, OrderDate
-                  FROM dbo.Orders
-                  WHERE OrderId = @OrderId AND UserId = @UserId",
-                Db.P("@OrderId", orderId),
-                Db.P("@UserId", userId));
-
-            if (orderTable.Rows.Count == 0)
+            foreach (DataRow h in head.Rows)
             {
-                return null;
-            }
-
-            DataRow row = orderTable.Rows[0];
-
-            OrderView order = new OrderView
-            {
-                OrderId = Convert.ToInt32(row["OrderId"]),
-                CustomerName = Convert.ToString(row["CustomerName"]),
-                Phone = Convert.ToString(row["Phone"]),
-                DeliveryAddress = Convert.ToString(row["DeliveryAddress"]),
-                DeliveryDate = Convert.ToDateTime(row["DeliveryDate"]),
-                FlowerSubtotal = Convert.ToDecimal(row["FlowerSubtotal"]),
-                DeliveryFee = Convert.ToDecimal(row["DeliveryFee"]),
-                GrandTotal = Convert.ToDecimal(row["GrandTotal"]),
-                Status = Convert.ToString(row["Status"]),
-                OrderDate = Convert.ToDateTime(row["OrderDate"]),
-                Lines = new List<OrderLine>()
-            };
-
-            DataTable detailTable = Db.GetDataTable(
-                @"SELECT ItemName, Quantity, UnitPrice, WrappingName, WrappingPrice,
-                         RibbonName, RibbonPrice, LineTotal
-                  FROM dbo.OrderDetails
-                  WHERE OrderId = @OrderId
-                  ORDER BY OrderDetailId",
-                Db.P("@OrderId", orderId));
-
-            foreach (DataRow detail in detailTable.Rows)
-            {
-                order.Lines.Add(new OrderLine
+                OrderInfo info = new OrderInfo();
+                info.OrderId = (int)h["OrderId"];
+                info.CustomerName = (string)h["CustomerName"];
+                info.Phone = (string)h["Phone"];
+                info.DeliveryAddress = (string)h["DeliveryAddress"];
+                info.DeliveryDate = (DateTime)h["DeliveryDate"];
+                info.Subtotal = (decimal)h["Subtotal"];
+                info.DeliveryFee = (decimal)h["DeliveryFee"];
+                info.TotalAmount = (decimal)h["TotalAmount"];
+                info.Status = (string)h["Status"];
+                info.OrderedAt = (DateTime)h["OrderedAt"];
+                if (lineMap.ContainsKey(info.OrderId))
                 {
-                    ItemName = Convert.ToString(detail["ItemName"]),
-                    Quantity = Convert.ToInt32(detail["Quantity"]),
-                    UnitPrice = Convert.ToDecimal(detail["UnitPrice"]),
-                    WrappingName = detail["WrappingName"] == DBNull.Value
-                        ? null
-                        : Convert.ToString(detail["WrappingName"]),
-                    WrappingPrice = Convert.ToDecimal(detail["WrappingPrice"]),
-                    RibbonName = detail["RibbonName"] == DBNull.Value
-                        ? null
-                        : Convert.ToString(detail["RibbonName"]),
-                    RibbonPrice = Convert.ToDecimal(detail["RibbonPrice"]),
-                    LineTotal = Convert.ToDecimal(detail["LineTotal"])
-                });
+                    info.Lines.AddRange(lineMap[info.OrderId]);
+                }
+                list.Add(info);
             }
 
-            return order;
+            return list;
         }
     }
 }

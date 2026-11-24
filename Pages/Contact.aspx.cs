@@ -1,107 +1,64 @@
 using System;
-using System.Data;
-using System.Data.SqlClient;
-using System.Web.UI;
+using System.Web;
+using BloomSpace;
 
-namespace BloomSpace.Pages
+public partial class Pages_Contact : System.Web.UI.Page
 {
-    public partial class ContactPage : BloomPage
+    protected void Page_Load(object sender, EventArgs e)
     {
-        protected void Page_Load(object sender, EventArgs e)
+        if (!IsPostBack && AuthHelper.IsLoggedIn)
         {
-            if (IsPostBack)
-            {
-                return;
-            }
+            txtName.Text = AuthHelper.CurrentUserName;
+        }
+    }
 
-            if (Auth.IsLoggedIn)
-            {
-                if (string.IsNullOrEmpty(txtName.Text))
-                {
-                    txtName.Text = Auth.CurrentUserName;
-                }
+    protected void btnSend_Click(object sender, EventArgs e)
+    {
+        string name = (txtName.Text ?? "").Trim();
+        string email = (txtEmail.Text ?? "").Trim();
+        string subject = (txtSubject.Text ?? "").Trim();
+        string body = (txtBody.Text ?? "").Trim();
 
-                if (string.IsNullOrEmpty(txtEmail.Text))
-                {
-                    txtEmail.Text = Auth.CurrentUserEmail;
-                }
-            }
+        string problem = null;
+        if (!Validation.IsValidName(name)) problem = "Please enter your name.";
+        else if (!Validation.IsValidEmail(email)) problem = "Please enter a valid email address.";
+        else if (subject.Length < 3 || subject.Length > 150) problem = "Please enter a subject (3 to 150 characters).";
+        else if (body.Length < 10 || body.Length > 2000) problem = "Please write a message between 10 and 2000 characters.";
+
+        if (problem != null)
+        {
+            ShowMessage(problem, true);
+            return;
         }
 
-        protected void btnSend_Click(object sender, EventArgs e)
+        try
         {
-            pnlSuccess.Visible = false;
-            pnlError.Visible = false;
-
-            // Honeypot: real visitors never fill this hidden field.
-            if (!string.IsNullOrWhiteSpace(txtWebsite.Text))
+            using (var con = Db.Open())
+            using (var cmd = new System.Data.SqlClient.SqlCommand(
+                "INSERT INTO dbo.ContactMessages (FullName, Email, Subject, Message) VALUES (@n, @e, @s, @m)", con))
             {
-                ShowSuccess();
-                return;
-            }
-
-            string name = (txtName.Text ?? string.Empty).Trim();
-            string email = (txtEmail.Text ?? string.Empty).Trim();
-            string subject = (txtSubject.Text ?? string.Empty).Trim();
-            string message = (txtMessage.Text ?? string.Empty).Trim();
-
-            if (!Validation.IsValidName(name))
-            {
-                ShowError("Please enter your name (letters only, at least two characters).");
-                return;
-            }
-
-            if (!Validation.IsValidEmail(email))
-            {
-                ShowError("Please enter a valid email address so we can reply.");
-                return;
-            }
-
-            if (subject.Length < 3 || subject.Length > 150)
-            {
-                ShowError("Please add a short subject, between 3 and 150 characters.");
-                return;
-            }
-
-            if (message.Length < 10 || message.Length > 2000)
-            {
-                ShowError("Please write a message between 10 and 2000 characters.");
-                return;
-            }
-
-            try
-            {
-                const string sql = @"
-INSERT INTO dbo.ContactMessages (FullName, Email, Subject, Message)
-VALUES (@FullName, @Email, @Subject, @Message);";
-
-                Db.ExecuteNonQuery(
-                    sql,
-                    new SqlParameter("@FullName", SqlDbType.NVarChar, 100) { Value = name },
-                    new SqlParameter("@Email", SqlDbType.NVarChar, 150) { Value = email },
-                    new SqlParameter("@Subject", SqlDbType.NVarChar, 150) { Value = subject },
-                    new SqlParameter("@Message", SqlDbType.NVarChar, 2000) { Value = message });
-
-                ShowSuccess();
-            }
-            catch (Exception exception)
-            {
-                Logger.Log(exception);
-                ShowError("We could not send your message right now. Please try again in a moment.");
+                cmd.Parameters.AddWithValue("@n", name);
+                cmd.Parameters.AddWithValue("@e", email);
+                cmd.Parameters.AddWithValue("@s", subject);
+                cmd.Parameters.AddWithValue("@m", body);
+                cmd.ExecuteNonQuery();
             }
         }
-
-        private void ShowSuccess()
+        catch (Exception ex)
         {
-            pnlSuccess.Visible = true;
-            txtSubject.Text = string.Empty;
-            txtMessage.Text = string.Empty;
+            ErrorLog.Write(ex);
+            ShowMessage("Sorry, we could not send your message right now. Please try again in a moment.", true);
+            return;
         }
 
-        private void ShowError(string message)
-        {
-            pnlError.Visible = true;
-            litError.Text = Server.HtmlEncode(message);
-        }
+        pnlForm.Visible = false;
+        ShowMessage("Thank you! Your message has been sent. We will get back to you soon.", false);
+    }
+
+    private void ShowMessage(string message, bool isError)
+    {
+        litMessage.Text = HttpUtility.HtmlEncode(message);
+        pnlMessage.CssClass = isError ? "alert alert-error" : "alert alert-success";
+        pnlMessage.Visible = true;
     }
 }

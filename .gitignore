@@ -5,8 +5,10 @@
 *.userosscache
 *.sln.docstates
 
-## Logs
-App_Data/Logs/*.log
+## Temporary / Archives
+*.zip
+*.log
+App_Data/Logs/*
 
 ## Build results
 [Bb]in/

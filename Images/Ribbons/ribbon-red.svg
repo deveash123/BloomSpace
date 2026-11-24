@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <defs>
+    <linearGradient id="redVelvet" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E84855" />
+      <stop offset="35%" stop-color="#B5252F" />
+      <stop offset="70%" stop-color="#8B141C" />
+      <stop offset="100%" stop-color="#5E0B11" />
+    </linearGradient>
+    <filter id="redShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#3A080C" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  <rect width="400" height="400" fill="#FAF5F3" />
+  <path d="M-20 160 L420 160 L420 240 L-20 240 Z" fill="url(#redVelvet)" opacity="0.9" />
+  <g filter="url(#redShadow)">
+    <path d="M200 200 C120 100 60 130 90 200 C110 245 170 235 200 200 Z" fill="url(#redVelvet)" />
+    <path d="M200 200 C280 100 340 130 310 200 C290 245 230 235 200 200 Z" fill="url(#redVelvet)" />
+    <path d="M185 210 C175 260 145 315 130 350 L160 340 L185 365 L200 215 Z" fill="url(#redVelvet)" />
+    <path d="M215 210 C225 260 255 315 270 350 L240 340 L215 365 L200 215 Z" fill="url(#redVelvet)" />
+    <ellipse cx="200" cy="200" rx="20" ry="24" fill="url(#redVelvet)" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" />
+  </g>
+</svg>

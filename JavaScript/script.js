@@ -1,503 +1,327 @@
-/* ============================================================
-   BLOOM SPACE — Front-end interactions
-   Vanilla JavaScript only. No frameworks, no dependencies.
-   ============================================================ */
+/* =====================================================================
+   BLOOM SPACE - script.js
+   1) Mobile navigation toggle
+   2) Custom bouquet builder (live price, summary and preview)
 
+   IMPORTANT: prices calculated here are for DISPLAY ONLY.
+   The C# code re-reads every price from SQL Server before saving anything.
+   ===================================================================== */
 (function () {
-    "use strict";
+    'use strict';
 
-    /* --------------------------------------------------------
-       0. Helpers
-       -------------------------------------------------------- */
+    /* ---------------------------------------------------------------
+       1. Mobile navigation
+       --------------------------------------------------------------- */
+    var toggle = document.querySelector('.nav-toggle');
+    var nav = document.getElementById('siteNav');
 
-    var toastTimer = null;
-
-    function showToast(message) {
-        var toast = document.getElementById("toast");
-
-        if (!toast || !message) {
-            return;
-        }
-
-        toast.textContent = message;
-        toast.classList.add("show");
-
-        window.clearTimeout(toastTimer);
-        toastTimer = window.setTimeout(function () {
-            toast.classList.remove("show");
-        }, 3600);
-    }
-
-    window.bloomToast = showToast;
-
-    function toInt(value, fallback) {
-        var parsed = parseInt(value, 10);
-        return isNaN(parsed) ? fallback : parsed;
-    }
-
-    function toNumber(value) {
-        var parsed = parseFloat(value);
-        return isNaN(parsed) ? 0 : parsed;
-    }
-
-    function formatInr(value) {
-        var rounded = Math.round(value);
-
-        try {
-            return "\u20B9" + new Intl.NumberFormat("en-IN", {
-                maximumFractionDigits: 0
-            }).format(rounded);
-        } catch (error) {
-            return "\u20B9" + rounded;
-        }
-    }
-
-    function localIsoDate(date) {
-        var month = date.getMonth() + 1;
-        var day = date.getDate();
-
-        return date.getFullYear() + "-" +
-            (month < 10 ? "0" : "") + month + "-" +
-            (day < 10 ? "0" : "") + day;
-    }
-
-    /* --------------------------------------------------------
-       1. Header shadow on scroll
-       -------------------------------------------------------- */
-
-    var header = document.getElementById("siteHeader");
-
-    function updateHeader() {
-        if (!header) {
-            return;
-        }
-
-        header.classList.toggle("is-scrolled", window.scrollY > 8);
-    }
-
-    window.addEventListener("scroll", updateHeader, { passive: true });
-    updateHeader();
-
-    /* --------------------------------------------------------
-       2. Mobile navigation
-       -------------------------------------------------------- */
-
-    var menuToggle = document.getElementById("menuToggle");
-    var navLinks = document.getElementById("navLinks");
-
-    function closeNavigation() {
-        if (!menuToggle || !navLinks) {
-            return;
-        }
-
-        menuToggle.classList.remove("is-open");
-        menuToggle.setAttribute("aria-expanded", "false");
-        menuToggle.setAttribute("aria-label", "Open menu");
-        navLinks.classList.remove("open");
-        document.body.classList.remove("nav-open");
-    }
-
-    function openNavigation() {
-        if (!menuToggle || !navLinks) {
-            return;
-        }
-
-        menuToggle.classList.add("is-open");
-        menuToggle.setAttribute("aria-expanded", "true");
-        menuToggle.setAttribute("aria-label", "Close menu");
-        navLinks.classList.add("open");
-        document.body.classList.add("nav-open");
-    }
-
-    if (menuToggle && navLinks) {
-        menuToggle.addEventListener("click", function () {
-            if (navLinks.classList.contains("open")) {
-                closeNavigation();
-            } else {
-                openNavigation();
-            }
+    if (toggle && nav) {
+        toggle.addEventListener('click', function () {
+            var open = nav.classList.toggle('is-open');
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
         });
 
-        navLinks.addEventListener("click", function (event) {
-            var link = event.target.closest("a");
-
-            if (link && !link.classList.contains("mobile-account-link")) {
-                closeNavigation();
+        // Close the menu after choosing a link, or when Escape is pressed.
+        nav.addEventListener('click', function (e) {
+            if (e.target.tagName === 'A') {
+                nav.classList.remove('is-open');
+                toggle.setAttribute('aria-expanded', 'false');
             }
         });
-
-        document.addEventListener("keydown", function (event) {
-            if (event.key === "Escape") {
-                closeNavigation();
-            }
-        });
-
-        window.addEventListener("resize", function () {
-            if (window.innerWidth > 1080) {
-                closeNavigation();
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && nav.classList.contains('is-open')) {
+                nav.classList.remove('is-open');
+                toggle.setAttribute('aria-expanded', 'false');
+                toggle.focus();
             }
         });
     }
 
-    /* --------------------------------------------------------
-       3. Shop search filter
-       -------------------------------------------------------- */
+    /* ---------------------------------------------------------------
+       2. Password show/hide visibility toggle
+       --------------------------------------------------------------- */
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest ? e.target.closest('.password-toggle') : null;
+        if (!btn) { return; }
 
-    var shopSearch = document.getElementById("shopSearch");
-    var shopGrid = document.getElementById("shopGrid");
-    var shopCount = document.getElementById("shopCount");
+        var wrap = btn.closest('.password-field-wrap');
+        if (!wrap) { return; }
 
-    if (shopSearch && shopGrid) {
-        var productCards = Array.prototype.slice.call(
-            shopGrid.querySelectorAll(".product-card")
-        );
+        var input = wrap.querySelector('input');
+        if (!input) { return; }
 
-        var noResults = document.createElement("p");
-        noResults.className = "shop-no-results";
-        noResults.textContent = "No bouquets match that search. Try another flower or name.";
-        noResults.hidden = true;
-        shopGrid.parentNode.insertBefore(noResults, shopGrid.nextSibling);
+        var isPassword = input.type === 'password';
+        input.type = isPassword ? 'text' : 'password';
 
-        var applyShopFilter = function () {
-            var query = (shopSearch.value || "").trim().toLowerCase();
-            var visible = 0;
-
-            productCards.forEach(function (card) {
-                var haystack = (
-                    (card.getAttribute("data-name") || "") + " " +
-                    (card.getAttribute("data-category") || "")
-                ).toLowerCase();
-
-                var matches = query === "" || haystack.indexOf(query) !== -1;
-                card.hidden = !matches;
-
-                if (matches) {
-                    visible += 1;
-                }
-            });
-
-            if (shopCount) {
-                shopCount.textContent = visible + (visible === 1 ? " bouquet" : " bouquets");
-            }
-
-            noResults.hidden = visible !== 0;
-        };
-
-        var searchTimer = null;
-
-        shopSearch.addEventListener("input", function () {
-            window.clearTimeout(searchTimer);
-            searchTimer = window.setTimeout(applyShopFilter, 80);
-        });
-
-        shopSearch.addEventListener("search", applyShopFilter);
-    }
-
-    /* --------------------------------------------------------
-       4. Quantity steppers (builder + cart)
-       -------------------------------------------------------- */
-
-    document.addEventListener("click", function (event) {
-        var button = event.target.closest(".qty-btn");
-
-        if (!button) {
-            return;
+        var eyeOpen = btn.querySelector('.eye-open');
+        var eyeClosed = btn.querySelector('.eye-closed');
+        if (eyeOpen && eyeClosed) {
+            eyeOpen.style.display = isPassword ? 'none' : 'block';
+            eyeClosed.style.display = isPassword ? 'block' : 'none';
         }
-
-        var stepper = button.closest(".qty-stepper");
-        var input = stepper ? stepper.querySelector(".qty-input") : null;
-
-        if (!input) {
-            return;
-        }
-
-        event.preventDefault();
-
-        var min = toInt(input.getAttribute("min"), 0);
-        var max = toInt(input.getAttribute("max"), 99);
-        var step = toInt(button.getAttribute("data-step"), 0);
-        var current = toInt(input.value, min);
-
-        input.value = Math.min(max, Math.max(min, current + step));
-        input.dispatchEvent(new Event("input", { bubbles: true }));
+        btn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
     });
 
-    /* --------------------------------------------------------
-       5. Custom bouquet builder
-       -------------------------------------------------------- */
+    /* ---------------------------------------------------------------
+       3. Custom bouquet builder
+       --------------------------------------------------------------- */
+    var builder = document.getElementById('bouquetBuilder');
+    if (!builder) { return; }
 
-    var builder = document.querySelector(".builder-layout");
+    var MAX_PER_FLOWER = 50;       // same limit as the server
+    var MAX_PREVIEW_HEADS = 15;    // how many flower heads the preview draws
 
-    if (builder) {
-        var stage = document.getElementById("bouquetPreview");
-        var previewWrap = document.getElementById("previewWrap");
-        var previewBow = document.getElementById("previewBow");
-        var previewEmpty = document.getElementById("previewEmpty");
-        var previewCaption = document.getElementById("previewCaption");
+    var deliveryFee = parseFloat(builder.getAttribute('data-delivery')) || 0;
+    var money = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
 
-        var summaryFlowers = document.getElementById("summaryFlowers");
-        var summaryStems = document.getElementById("summaryStems");
-        var sumFlowers = document.getElementById("sumFlowers");
-        var sumWrapping = document.getElementById("sumWrapping");
-        var sumRibbon = document.getElementById("sumRibbon");
-        var sumDelivery = document.getElementById("sumDelivery");
-        var sumGrand = document.getElementById("sumGrand");
-        var deliveryNote = document.getElementById("deliveryNote");
+    var flowerCards = builder.querySelectorAll('.flower-card');
+    var wrapInputs = builder.querySelectorAll('input[name="wrapping"]');
+    var ribbonInputs = builder.querySelectorAll('input[name="ribbon"]');
 
-        var flowerOptions = Array.prototype.slice.call(
-            document.querySelectorAll(".flower-option")
-        );
+    var summaryList = document.getElementById('summaryList');
+    var elFlowerCost = document.getElementById('totFlowers');
+    var elWrap = document.getElementById('totWrapping');
+    var elRibbon = document.getElementById('totRibbon');
+    var elSubtotal = document.getElementById('totSubtotal');
+    var elDelivery = document.getElementById('totDelivery');
+    var elGrand = document.getElementById('totGrand');
+    var elHint = document.getElementById('builderHint');
+    var addButton = document.getElementById('btnAddBouquet');
 
-        var freeDeliveryThreshold = 2000;
-        var deliveryFee = 149;
-        var maxStems = 100;
+    var previewFlowers = document.getElementById('previewFlowers');
+    var previewEmpty = document.getElementById('previewEmpty');
+    var previewGreenery = document.getElementById('previewGreenery');
+    var paperShapes = builder.querySelectorAll('.bp-paper');
+    var ribbonShapes = builder.querySelectorAll('.bp-ribbon');
 
-        function selectedWrapping() {
-            return document.querySelector('input[name="wrappingId"]:checked');
-        }
-
-        function selectedRibbon() {
-            return document.querySelector('input[name="ribbonId"]:checked');
-        }
-
-        function updateFlowerState(option, input, checkbox) {
-            if (!input) {
-                return;
-            }
-
-            var quantity = toInt(input.value, 0);
-
-            if (quantity < 0) {
-                quantity = 0;
-            }
-
-            option.classList.toggle("is-selected", quantity > 0);
-
-            if (checkbox) {
-                checkbox.checked = quantity > 0;
-            }
-        }
-
-        function clampBouquet(input) {
-            var quantity = Math.max(0, Math.min(50, toInt(input.value, 0)));
-            var otherStems = 0;
-
-            flowerOptions.forEach(function (option) {
-                var otherInput = option.querySelector(".qty-input");
-
-                if (otherInput && otherInput !== input) {
-                    otherStems += Math.max(0, toInt(otherInput.value, 0));
-                }
-            });
-
-            if (otherStems + quantity > maxStems) {
-                quantity = Math.max(0, maxStems - otherStems);
-                showToast("A bouquet can hold up to " + maxStems + " stems.");
-            }
-
-            input.value = quantity;
-            return quantity;
-        }
-
-        function recalculate() {
-            var flowersTotal = 0;
-            var stems = 0;
-            var names = [];
-            var lines = document.createDocumentFragment();
-
-            flowerOptions.forEach(function (option) {
-                var input = option.querySelector(".qty-input");
-                var checkbox = option.querySelector(".flower-toggle");
-                var quantity = Math.max(0, toInt(input ? input.value : 0, 0));
-                var price = toNumber(option.getAttribute("data-price"));
-                var flowerId = option.getAttribute("data-flower-id");
-                var name = option.getAttribute("data-name") || "Flowers";
-                var bloom = stage
-                    ? stage.querySelector('.preview-bloom[data-preview-id="' + flowerId + '"]')
-                    : null;
-
-                updateFlowerState(option, input, checkbox);
-
-                if (quantity > 0) {
-                    var lineTotal = price * quantity;
-                    flowersTotal += lineTotal;
-                    stems += quantity;
-                    names.push(quantity + " \u00D7 " + name);
-
-                    var row = document.createElement("li");
-                    var label = document.createElement("span");
-                    var amount = document.createElement("strong");
-
-                    label.textContent = name + " \u00D7 " + quantity;
-                    amount.textContent = formatInr(lineTotal);
-                    row.appendChild(label);
-                    row.appendChild(amount);
-                    lines.appendChild(row);
-
-                    if (bloom) {
-                        bloom.classList.add("is-active");
-
-                        var badge = bloom.querySelector(".preview-qty");
-
-                        if (badge) {
-                            badge.textContent = quantity;
-                        }
-                    }
-                } else if (bloom) {
-                    bloom.classList.remove("is-active");
-                }
-            });
-
-            if (summaryFlowers) {
-                summaryFlowers.innerHTML = "";
-
-                if (stems === 0) {
-                    var empty = document.createElement("li");
-                    empty.className = "summary-empty";
-                    empty.id = "summaryEmpty";
-                    empty.textContent = "No flowers selected yet.";
-                    summaryFlowers.appendChild(empty);
-                } else {
-                    summaryFlowers.appendChild(lines);
-                }
-            }
-
-            var wrapping = selectedWrapping();
-            var ribbon = selectedRibbon();
-            var wrappingPrice = wrapping ? toNumber(wrapping.getAttribute("data-price")) : 0;
-            var ribbonPrice = ribbon ? toNumber(ribbon.getAttribute("data-price")) : 0;
-            var subtotal = flowersTotal + wrappingPrice + ribbonPrice;
-            var delivery = subtotal >= freeDeliveryThreshold ? 0 : deliveryFee;
-
-            if (previewWrap) {
-                var wrapColor = wrapping ? wrapping.getAttribute("data-color") : "";
-
-                if (wrapColor) {
-                    previewWrap.style.setProperty("--wrap-color", wrapColor);
-                }
-            }
-
-            if (previewBow && ribbon) {
-                var bowColor = ribbon.getAttribute("data-color");
-
-                if (bowColor) {
-                    previewBow.style.setProperty("--bow-color", bowColor);
-                }
-            }
-
-            if (stage) {
-                stage.classList.toggle("is-empty", stems === 0);
-                stage.classList.toggle("has-flowers", stems > 0);
-            }
-
-            if (previewEmpty) {
-                previewEmpty.textContent = stems === 0
-                    ? "Your bouquet starts with a single stem."
-                    : "Hand-tied on the morning of delivery.";
-            }
-
-            if (previewCaption) {
-                previewCaption.textContent = names.length > 0
-                    ? names.join(" \u00B7 ")
-                    : "Nothing selected yet";
-            }
-
-            if (summaryStems) {
-                summaryStems.textContent = stems + (stems === 1 ? " stem" : " stems");
-            }
-
-            if (sumFlowers) {
-                sumFlowers.textContent = formatInr(flowersTotal);
-            }
-
-            if (sumWrapping) {
-                sumWrapping.textContent = wrapping
-                    ? (wrappingPrice > 0 ? formatInr(wrappingPrice) : "Included")
-                    : "\u2014";
-            }
-
-            if (sumRibbon) {
-                sumRibbon.textContent = ribbon
-                    ? (ribbonPrice > 0 ? formatInr(ribbonPrice) : "Included")
-                    : "\u2014";
-            }
-
-            if (sumDelivery) {
-                sumDelivery.textContent = stems === 0 ? "\u2014" : (delivery === 0 ? "Complimentary" : formatInr(delivery));
-            }
-
-            if (sumGrand) {
-                sumGrand.textContent = stems === 0 ? formatInr(0) : formatInr(subtotal + delivery);
-            }
-
-            if (deliveryNote) {
-                if (stems === 0) {
-                    deliveryNote.textContent = "Select flowers to see your estimated total.";
-                } else if (subtotal >= freeDeliveryThreshold) {
-                    deliveryNote.textContent = "Complimentary delivery unlocked \u2014 beautifully done.";
-                } else {
-                    var remaining = freeDeliveryThreshold - subtotal;
-                    deliveryNote.textContent = "Add " + formatInr(remaining) +
-                        " more for complimentary delivery.";
-                }
-            }
-        }
-
-        flowerOptions.forEach(function (option) {
-            var checkbox = option.querySelector(".flower-toggle");
-            var input = option.querySelector(".qty-input");
-
-            if (!input) {
-                return;
-            }
-
-            if (checkbox) {
-                checkbox.addEventListener("change", function () {
-                    if (checkbox.checked) {
-                        if (toInt(input.value, 0) <= 0) {
-                            input.value = 1;
-                        }
-                    } else {
-                        input.value = 0;
-                    }
-
-                    recalculate();
-                });
-            }
-
-            input.addEventListener("input", function () {
-                clampBouquet(input);
-                recalculate();
-            });
-
-            input.addEventListener("change", function () {
-                clampBouquet(input);
-                recalculate();
-            });
-        });
-
-        Array.prototype.slice
-            .call(document.querySelectorAll('input[name="wrappingId"], input[name="ribbonId"]'))
-            .forEach(function (radio) {
-                radio.addEventListener("change", recalculate);
-            });
-
-        recalculate();
+    function num(value) {
+        var n = parseFloat(value);
+        return isNaN(n) ? 0 : n;
     }
 
-    /* --------------------------------------------------------
-       6. Delivery date limits (tomorrow through 30 days)
-       -------------------------------------------------------- */
-
-    var dateInput = document.querySelector('input[type="date"]');
-
-    if (dateInput) {
-        var today = new Date();
-        var earliest = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-        var latest = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 30);
-
-        dateInput.setAttribute("min", localIsoDate(earliest));
-        dateInput.setAttribute("max", localIsoDate(latest));
+    function getQty(card) {
+        return parseInt(card.querySelector('.qty-input').value, 10) || 0;
     }
 
+    function setQty(card, qty) {
+        qty = Math.max(0, Math.min(MAX_PER_FLOWER, qty));
+        card.querySelector('.qty-input').value = qty;
+        card.querySelector('.qty-value').textContent = qty;
+        card.classList.toggle('is-selected', qty > 0);
+        card.querySelector('.qty-minus').disabled = qty <= 0;
+        card.querySelector('.qty-plus').disabled = qty >= MAX_PER_FLOWER;
+    }
+
+    function selectedOption(inputs) {
+        for (var i = 0; i < inputs.length; i++) {
+            if (inputs[i].checked) { return inputs[i].closest('.option-card'); }
+        }
+        return null;
+    }
+
+    function markSelectedOptions(inputs) {
+        for (var i = 0; i < inputs.length; i++) {
+            inputs[i].closest('.option-card').classList.toggle('is-selected', inputs[i].checked);
+        }
+    }
+
+    function addSummaryRow(label, amount) {
+        var li = document.createElement('li');
+        var l = document.createElement('span');
+        var a = document.createElement('span');
+        l.className = 's-label';
+        a.className = 's-amount';
+        l.textContent = label;
+        a.textContent = amount;
+        li.appendChild(l);
+        li.appendChild(a);
+        summaryList.appendChild(li);
+    }
+
+    /* Draws the flowers in a lush, artistic bouquet arrangement */
+    function drawPreview(heads) {
+        previewFlowers.innerHTML = '';
+        var hasFlowers = heads.length > 0;
+        previewEmpty.style.display = hasFlowers ? 'none' : 'block';
+        if (previewGreenery) {
+            previewGreenery.style.display = hasFlowers ? 'block' : 'none';
+        }
+        if (!hasFlowers) { return; }
+
+        var width = previewFlowers.clientWidth || 340;
+        var height = previewFlowers.clientHeight || 380;
+        var n = heads.length;
+        var centerX = width / 2;
+        var baseY = height - 150;     // neckline where flowers emerge from the wrap
+
+        var size = n === 1 ? 98 : (n <= 3 ? 88 : (n <= 7 ? 80 : 72));
+
+        if (n === 1) {
+            // Single centerpiece bloom
+            placeFlower(heads[0], centerX - size / 2, baseY - 85, 0, 10, size);
+        } else if (n === 2) {
+            // Two nested companion blooms
+            placeFlower(heads[0], centerX - size * 0.9, baseY - 78, -8, 8, size);
+            placeFlower(heads[1], centerX - size * 0.1, baseY - 78, 8, 9, size);
+        } else if (n === 3) {
+            // Classic florist triad: hero flower elevated in center, two flanking
+            placeFlower(heads[0], centerX - size * 1.05, baseY - 62, -14, 7, size);
+            placeFlower(heads[1], centerX - size / 2,     baseY - 95,   0, 10, size);
+            placeFlower(heads[2], centerX + size * 0.05, baseY - 62,  14, 8, size);
+        } else {
+            // Tiered florist dome arrangement
+            var backCount = Math.floor(n * 0.42);
+            var frontCount = n - backCount;
+
+            // Back tier (raised higher, nestled in center)
+            for (var b = 0; b < backCount; b++) {
+                var tb = backCount === 1 ? 0.5 : b / (backCount - 1);
+                var angleB = (-36 + tb * 72) * Math.PI / 180;
+                var radiusB = 85;
+                var xB = centerX + Math.sin(angleB) * radiusB * 1.25 - size / 2;
+                var yB = (baseY - 75) - Math.cos(angleB) * radiusB * 0.6 - size / 2;
+                var rotB = -20 + tb * 40;
+                placeFlower(heads[b], xB, yB, rotB, 6 + b, size);
+            }
+
+            // Front tier (lower, gracefully framing neckline)
+            for (var f = 0; f < frontCount; f++) {
+                var tf = frontCount === 1 ? 0.5 : f / (frontCount - 1);
+                var angleF = (-52 + tf * 104) * Math.PI / 180;
+                var radiusF = 58;
+                var xF = centerX + Math.sin(angleF) * radiusF * 1.55 - size / 2;
+                var yF = (baseY - 42) - Math.cos(angleF) * radiusF * 0.65 - size / 2;
+                var rotF = -30 + tf * 60;
+                placeFlower(heads[backCount + f], xF, yF, rotF, 12 + f, size);
+            }
+        }
+    }
+
+    function placeFlower(head, x, y, rotation, zIndex, size) {
+        var img = document.createElement('img');
+        img.className = 'bp-flower';
+        img.src = head.img;
+        img.alt = head.name || '';
+        img.title = head.name || '';
+        img.style.width = Math.round(size) + 'px';
+        img.style.height = Math.round(size) + 'px';
+        img.style.left = Math.round(x) + 'px';
+        img.style.top = Math.round(Math.max(15, y)) + 'px';
+        img.style.transform = 'rotate(' + Math.round(rotation) + 'deg)';
+        img.style.zIndex = String(zIndex);
+        previewFlowers.appendChild(img);
+    }
+
+    function update() {
+        var flowerCost = 0;
+        var stems = 0;
+        var heads = [];
+        var picked = [];
+
+        summaryList.innerHTML = '';
+
+        for (var i = 0; i < flowerCards.length; i++) {
+            var card = flowerCards[i];
+            var qty = getQty(card);
+            if (qty > 0) {
+                var price = num(card.getAttribute('data-price'));
+                var name = card.getAttribute('data-name');
+                var img = card.getAttribute('data-img');
+                flowerCost += price * qty;
+                stems += qty;
+                picked.push({ name: name, qty: qty, price: price, img: img });
+                addSummaryRow(qty + ' × ' + name, money.format(price * qty));
+            }
+        }
+
+        var wrapCard = selectedOption(wrapInputs);
+        var ribbonCard = selectedOption(ribbonInputs);
+        var wrapPrice = wrapCard ? num(wrapCard.getAttribute('data-price')) : 0;
+        var ribbonPrice = ribbonCard ? num(ribbonCard.getAttribute('data-price')) : 0;
+
+        if (!picked.length) {
+            var empty = document.createElement('li');
+            empty.className = 'summary-empty';
+            empty.textContent = 'No flowers chosen yet';
+            summaryList.appendChild(empty);
+        }
+        if (wrapCard && picked.length) { addSummaryRow(wrapCard.getAttribute('data-name'), money.format(wrapPrice)); }
+        if (ribbonCard && picked.length) { addSummaryRow(ribbonCard.getAttribute('data-name') + ' ribbon', money.format(ribbonPrice)); }
+
+        /* Price formula (display only):
+           Subtotal    = Flower Cost + Wrapping Price + Ribbon Price
+           Grand Total = Subtotal + Delivery Fee */
+        var subtotal = flowerCost + wrapPrice + ribbonPrice;
+        var grand = subtotal + deliveryFee;
+
+        elFlowerCost.textContent = money.format(flowerCost);
+        elWrap.textContent = money.format(wrapPrice);
+        elRibbon.textContent = money.format(ribbonPrice);
+        elSubtotal.textContent = money.format(subtotal);
+        elDelivery.textContent = money.format(deliveryFee);
+        elGrand.textContent = money.format(grand);
+
+        /* Preview: spread the heads across the chosen flowers in proportion to quantity. */
+        if (stems > 0) {
+            var count = Math.min(stems, MAX_PREVIEW_HEADS);
+            var expanded = [];
+            for (var p = 0; p < picked.length; p++) {
+                for (var q = 0; q < picked[p].qty; q++) { expanded.push(picked[p]); }
+            }
+            for (var h = 0; h < count; h++) {
+                heads.push(expanded[Math.floor(h * expanded.length / count)]);
+            }
+        }
+        drawPreview(heads);
+
+        if (wrapCard) {
+            var wrapColor = wrapCard.getAttribute('data-color');
+            for (var w = 0; w < paperShapes.length; w++) {
+                paperShapes[w].setAttribute('fill', wrapColor);
+            }
+        }
+        if (ribbonCard) {
+            var ribColor = ribbonCard.getAttribute('data-color');
+            for (var r = 0; r < ribbonShapes.length; r++) {
+                ribbonShapes[r].setAttribute('fill', ribColor);
+            }
+        }
+
+        markSelectedOptions(wrapInputs);
+        markSelectedOptions(ribbonInputs);
+
+        var ready = stems > 0 && !!wrapCard && !!ribbonCard;
+        if (addButton) { addButton.disabled = !ready; }
+        if (elHint) {
+            elHint.textContent = ready
+                ? stems + (stems === 1 ? ' stem' : ' stems') + ' selected. Ready to add to your cart.'
+                : 'Choose at least one flower, a wrapping paper and a ribbon.';
+        }
+    }
+
+    /* Quantity buttons (event delegation) */
+    builder.addEventListener('click', function (e) {
+        var btn = e.target.closest ? e.target.closest('.qty-btn') : null;
+        if (!btn) { return; }
+        var card = btn.closest('.flower-card');
+        if (!card) { return; }
+        setQty(card, getQty(card) + (btn.classList.contains('qty-plus') ? 1 : -1));
+        update();
+    });
+
+    /* Wrapping / ribbon selection */
+    builder.addEventListener('change', function (e) {
+        if (e.target && (e.target.name === 'wrapping' || e.target.name === 'ribbon')) { update(); }
+    });
+
+    /* Start: apply any quantities the server sent back (for example after a validation message). */
+    for (var c = 0; c < flowerCards.length; c++) { setQty(flowerCards[c], getQty(flowerCards[c])); }
+    update();
+
+    /* Redraw the fan if the screen is resized or rotated. */
+    var resizeTimer = null;
+    window.addEventListener('resize', function () {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(update, 150);
+    });
 })();

@@ -1,76 +1,59 @@
-<%@ Page Title="Create Account | Bloom Space" Language="C#" MasterPageFile="~/Site.Master" AutoEventWireup="true" CodeFile="Register.aspx.cs" Inherits="BloomSpace.Account.RegisterPage" %>
+<%@ Page Title="Create Account" Language="C#" MasterPageFile="~/Site.Master" AutoEventWireup="true" CodeFile="Register.aspx.cs" Inherits="Account_Register" %>
 
-<asp:Content ID="MainContent" ContentPlaceHolderID="MainContent" runat="server">
+<asp:Content ID="Content1" ContentPlaceHolderID="MainContent" runat="server">
+    <section class="section">
+        <div class="container">
+            <div class="auth-wrap">
+                <div class="form-card">
+                    <h1>Create Your Account</h1>
+                    <p class="auth-sub">Join Bloom Space to order flowers and design custom bouquets.</p>
 
-    <section class="auth-section">
-        <div class="auth-visual">
-            <img src="<%= ResolveUrl("~/Images/Flowers/custom-bouquet.svg") %>" alt="A custom Bloom Space bouquet" />
-            <div class="auth-visual-copy">
-                <span class="eyebrow">Join Bloom Space</span>
-                <h2>Beautiful flowers,<br /><em>beautifully simple.</em></h2>
-                <p>Create an account to save your bag, place orders and design custom bouquets for the people you love.</p>
-            </div>
-        </div>
+                    <asp:Panel ID="pnlMessage" runat="server" Visible="false" CssClass="alert alert-error" role="alert">
+                        <asp:Literal ID="litMessage" runat="server" />
+                    </asp:Panel>
 
-        <div class="auth-panel">
-            <div class="auth-card auth-card-wide">
-                <a class="brand auth-brand" href="<%= ResolveUrl("~/Pages/Home.aspx") %>">
-                    <img class="brand-mark" src="<%= ResolveUrl("~/Images/Logo/bloom-mark.svg") %>" alt="" width="36" height="36" />
-                    <span class="brand-text">
-                        BLOOM<span>SPACE</span>
-                        <small>Every bloom tells a story</small>
-                    </span>
-                </a>
-
-                <h1>Create your account</h1>
-                <p class="auth-lede">A few details, and your first bouquet is only a moment away.</p>
-
-                <asp:Panel ID="pnlError" runat="server" Visible="false" CssClass="alert alert-error">
-                    <asp:Literal ID="litError" runat="server" />
-                </asp:Panel>
-
-                <div class="form-field">
-                    <asp:Label ID="lblFullName" runat="server" AssociatedControlID="txtFullName" CssClass="field-label">Full name</asp:Label>
-                    <asp:TextBox ID="txtFullName" runat="server" CssClass="input" MaxLength="100" autocomplete="name" />
-                </div>
-
-                <div class="form-field">
-                    <asp:Label ID="lblEmail" runat="server" AssociatedControlID="txtEmail" CssClass="field-label">Email address</asp:Label>
-                    <asp:TextBox ID="txtEmail" runat="server" CssClass="input" TextMode="Email" MaxLength="150" autocomplete="email" />
-                </div>
-
-                <div class="form-field">
-                    <asp:Label ID="lblPhone" runat="server" AssociatedControlID="txtPhone" CssClass="field-label">Phone number</asp:Label>
-                    <asp:TextBox ID="txtPhone" runat="server" CssClass="input" TextMode="Phone" MaxLength="15" autocomplete="tel" />
-                    <span class="field-hint">A 10-digit Indian mobile number, for delivery updates only.</span>
-                </div>
-
-                <div class="form-grid">
-                    <div class="form-field">
-                        <asp:Label ID="lblPassword" runat="server" AssociatedControlID="txtPassword" CssClass="field-label">Password</asp:Label>
-                        <asp:TextBox ID="txtPassword" runat="server" CssClass="input" TextMode="Password" MaxLength="128" autocomplete="new-password" />
+                    <div class="form-group">
+                        <label for="<%= txtName.ClientID %>">Full name</label>
+                        <asp:TextBox ID="txtName" runat="server" MaxLength="100" autocomplete="name" />
                     </div>
-
-                    <div class="form-field">
-                        <asp:Label ID="lblConfirmPassword" runat="server" AssociatedControlID="txtConfirmPassword" CssClass="field-label">Confirm password</asp:Label>
-                        <asp:TextBox ID="txtConfirmPassword" runat="server" CssClass="input" TextMode="Password" MaxLength="128" autocomplete="new-password" />
+                    <div class="form-group">
+                        <label for="<%= txtEmail.ClientID %>">Email address</label>
+                        <asp:TextBox ID="txtEmail" runat="server" TextMode="Email" MaxLength="256" autocomplete="email" />
                     </div>
+                    <div class="form-group">
+                        <label for="<%= txtPhone.ClientID %>">Phone number</label>
+                        <asp:TextBox ID="txtPhone" runat="server" TextMode="Phone" MaxLength="20" autocomplete="tel" />
+                        <div class="form-hint">10-digit Indian mobile number.</div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="<%= txtPassword.ClientID %>">Password</label>
+                            <div class="password-field-wrap">
+                                <asp:TextBox ID="txtPassword" runat="server" TextMode="Password" MaxLength="100" autocomplete="new-password" />
+                                <button type="button" class="password-toggle" aria-label="Show password" tabindex="-1">
+                                    <svg class="eye-icon eye-open" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                    <svg class="eye-icon eye-closed" style="display:none;" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="<%= txtConfirm.ClientID %>">Confirm password</label>
+                            <div class="password-field-wrap">
+                                <asp:TextBox ID="txtConfirm" runat="server" TextMode="Password" MaxLength="100" autocomplete="new-password" />
+                                <button type="button" class="password-toggle" aria-label="Show password" tabindex="-1">
+                                    <svg class="eye-icon eye-open" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                    <svg class="eye-icon eye-closed" style="display:none;" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-hint" style="margin: -8px 0 20px;">At least 8 characters, with a letter and a number.</div>
+
+                    <asp:Button ID="btnRegister" runat="server" Text="Create Account" CssClass="btn btn-block" OnClick="btnRegister_Click" />
+
+                    <p class="auth-switch">Already have an account? <a href="<%= ResolveUrl("~/Account/Login.aspx") %>">Log in</a></p>
                 </div>
-
-                <span class="field-hint">At least 8 characters, including a letter and a number.</span>
-
-                <asp:Button ID="btnRegister" runat="server" CssClass="btn btn-primary btn-block" Text="Create account" OnClick="btnRegister_Click" />
-
-                <p class="auth-switch">
-                    Already have an account?
-                    <a href="<%= LoginUrl %>">Sign in</a>
-                </p>
-
-                <p class="auth-note">
-                    Your password is hashed with a unique salt before it is stored. We never keep plain-text passwords.
-                </p>
             </div>
         </div>
     </section>
-
 </asp:Content>

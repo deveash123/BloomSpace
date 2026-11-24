@@ -1,78 +1,62 @@
 using System;
 using System.Web;
 using System.Web.UI;
+using BloomSpace;
 
-namespace BloomSpace
+/// <summary>Code-behind for the shared layout (header, footer, login state, cart badge).</summary>
+public partial class SiteMaster : MasterPage
 {
-    public partial class SiteMaster : MasterPage
+    protected void Page_Load(object sender, EventArgs e)
     {
-        protected void Page_Load(object sender, EventArgs e)
+        litFee.Text = Money.Rupees(Db.DeliveryFee);
+
+        // Make every page title read "Page | Bloom Space".
+        if (Page != null && !string.IsNullOrEmpty(Page.Title) && !Page.Title.EndsWith("Bloom Space"))
         {
-            bool loggedIn = Auth.IsLoggedIn;
+            Page.Title = Page.Title + " | Bloom Space";
+        }
+    }
 
-            pnlLoggedIn.Visible = loggedIn;
-            pnlGuest.Visible = !loggedIn;
-            pnlMobileLoggedIn.Visible = loggedIn;
-            pnlMobileGuest.Visible = !loggedIn;
+    // PreRender runs after button clicks, so the cart badge is always up to date.
+    protected void Page_PreRender(object sender, EventArgs e)
+    {
+        bool loggedIn = AuthHelper.IsLoggedIn;
+        phGuest.Visible = !loggedIn;
+        phUser.Visible = loggedIn;
 
-            if (loggedIn)
-            {
-                string firstName = HttpUtility.HtmlEncode(Auth.FirstName);
-                litFirstName.Text = firstName;
-                litMobileFirstName.Text = firstName;
-            }
-
-            int cartCount = 0;
+        litCartBadge.Text = "";
+        if (loggedIn)
+        {
+            string name = AuthHelper.CurrentUserName.Trim();
+            int space = name.IndexOf(' ');
+            string first = space > 0 ? name.Substring(0, space) : name;
+            litName.Text = HttpUtility.HtmlEncode(first);
 
             try
             {
-                int? userId = Auth.CurrentUserId;
-
-                if (userId.HasValue)
+                int stems = CartService.StemCount(AuthHelper.CurrentUserId);
+                if (stems > 0)
                 {
-                    cartCount = CartService.GetCartCount(userId.Value);
+                    litCartBadge.Text = "<span class=\"cart-badge\">" + stems + "</span>";
                 }
             }
-            catch (Exception exception)
+            catch (Exception ex)
             {
-                // A catalogue problem must not break the shared header.
-                Logger.Log(exception);
+                ErrorLog.Write(ex);
             }
-
-            litCartCount.Text = cartCount.ToString();
-            litYear.Text = DateTime.Now.Year.ToString();
         }
+    }
 
-        protected void lnkLogout_Click(object sender, EventArgs e)
-        {
-            Auth.SignOut();
-            Response.Redirect("~/Pages/Home.aspx", false);
-            Context.ApplicationInstance.CompleteRequest();
-        }
+    protected void lbLogout_Click(object sender, EventArgs e)
+    {
+        AuthHelper.SignOut();
+        Response.Redirect("~/Pages/Home.aspx");
+    }
 
-        protected string NavClass(string path)
-        {
-            string current = Request.AppRelativeCurrentExecutionFilePath ?? string.Empty;
-
-            if (string.Equals(current, path, StringComparison.OrdinalIgnoreCase))
-            {
-                return "active";
-            }
-
-            // The site may be opened at "/" (default document resolves to Home).
-            if (path.EndsWith("Home.aspx", StringComparison.OrdinalIgnoreCase) &&
-                (current == "~/" || current.EndsWith("/Default.aspx", StringComparison.OrdinalIgnoreCase)))
-            {
-                return "active";
-            }
-
-            return string.Empty;
-        }
-
-        public string HomeClass { get { return NavClass("~/Pages/Home.aspx"); } }
-        public string ShopClass { get { return NavClass("~/Pages/Shop.aspx"); } }
-        public string CustomClass { get { return NavClass("~/Pages/CustomBouquet.aspx"); } }
-        public string AboutClass { get { return NavClass("~/Pages/About.aspx"); } }
-        public string ContactClass { get { return NavClass("~/Pages/Contact.aspx"); } }
+    /// <summary>Returns "active" for the navigation link of the page being viewed.</summary>
+    protected string Active(string pageName)
+    {
+        string path = Request.Path ?? "";
+        return path.EndsWith("/" + pageName, StringComparison.OrdinalIgnoreCase) ? "active" : "";
     }
 }

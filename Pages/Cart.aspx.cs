@@ -1,281 +1,251 @@
 using System;
-using System.Collections.Generic;
+using System.Data;
 using System.Globalization;
+using System.Web;
 using System.Web.UI;
 using System.Web.UI.WebControls;
+using BloomSpace;
 
-namespace BloomSpace.Pages
+public partial class Pages_Cart : System.Web.UI.Page
 {
-    public partial class CartPage : BloomPage
+    private const int MaxDaysAhead = 60;
+
+    private DataTable _wraps;
+    private DataTable _ribbons;
+
+    protected void Page_Load(object sender, EventArgs e)
     {
-        protected void Page_Load(object sender, EventArgs e)
+        // Cart and checkout are for logged-in customers only.
+        AuthHelper.RequireLogin(this);
+
+        if (IsPostBack) return;
+
+        if (Request.QueryString["added"] == "bouquet")
         {
-            if (!Auth.RequireLogin(this))
+            ShowMessage("Your custom bouquet has been added to your cart.", false);
+        }
+
+        PrefillCheckout();
+        BindCart();
+    }
+
+    // ------------------------------------------------------------------ binding
+
+    private void BindCart()
+    {
+        try
+        {
+            CartSummary cart = CartService.Load(AuthHelper.CurrentUserId);
+
+            pnlEmpty.Visible = cart.IsEmpty;
+            pnlCart.Visible = !cart.IsEmpty;
+            if (cart.IsEmpty) return;
+
+            _wraps = Db.Table("SELECT WrappingId, Name, Price FROM dbo.WrappingSheets WHERE IsActive = 1 ORDER BY WrappingId");
+            _ribbons = Db.Table("SELECT RibbonId, Name, Price FROM dbo.Ribbons WHERE IsActive = 1 ORDER BY RibbonId");
+
+            rptGroups.DataSource = cart.Groups;
+            rptGroups.DataBind();
+
+            litSubtotal.Text = HttpUtility.HtmlEncode(Money.Rupees(cart.Subtotal));
+            litDelivery.Text = HttpUtility.HtmlEncode(Money.Rupees(cart.DeliveryFee));
+            litTotal.Text = HttpUtility.HtmlEncode(Money.Rupees(cart.Total));
+        }
+        catch (Exception ex)
+        {
+            ErrorLog.Write(ex);
+            pnlCart.Visible = false;
+            pnlEmpty.Visible = false;
+            ShowMessage("Sorry, we could not load your cart right now. Please try again shortly.", true);
+        }
+    }
+
+    protected void rptGroups_ItemDataBound(object sender, RepeaterItemEventArgs e)
+    {
+        if (e.Item.ItemType != ListItemType.Item && e.Item.ItemType != ListItemType.AlternatingItem) return;
+
+        CartGroup group = (CartGroup)e.Item.DataItem;
+
+        Repeater items = (Repeater)e.Item.FindControl("rptItems");
+        items.DataSource = group.Items;
+        items.DataBind();
+
+        if (group.IsBouquet)
+        {
+            DropDownList ddlWrap = (DropDownList)e.Item.FindControl("ddlWrap");
+            DropDownList ddlRibbon = (DropDownList)e.Item.FindControl("ddlRibbon");
+            FillOptions(ddlWrap, _wraps, "WrappingId", group.WrappingId);
+            FillOptions(ddlRibbon, _ribbons, "RibbonId", group.RibbonId);
+        }
+    }
+
+    private static void FillOptions(DropDownList ddl, DataTable table, string idColumn, int selectedId)
+    {
+        ddl.Items.Clear();
+        foreach (DataRow r in table.Rows)
+        {
+            string label = (string)r["Name"] + " (" + Money.Rupees((decimal)r["Price"]) + ")";
+            ddl.Items.Add(new ListItem(label, Convert.ToString(r[idColumn])));
+        }
+        ListItem match = ddl.Items.FindByValue(selectedId.ToString());
+        if (match != null) ddl.SelectedValue = match.Value;
+    }
+
+    private void PrefillCheckout()
+    {
+        try
+        {
+            DataTable dt = Db.Table("SELECT FullName, Phone FROM dbo.Users WHERE UserId = @u", Db.P("@u", AuthHelper.CurrentUserId));
+            if (dt.Rows.Count == 1)
             {
-                return;
+                txtName.Text = (string)dt.Rows[0]["FullName"];
+                txtPhone.Text = (string)dt.Rows[0]["Phone"];
             }
+        }
+        catch (Exception ex)
+        {
+            ErrorLog.Write(ex);
+        }
+        txtDate.Attributes["min"] = DateTime.Today.AddDays(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        txtDate.Attributes["max"] = DateTime.Today.AddDays(MaxDaysAhead).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        txtDate.Text = DateTime.Today.AddDays(2).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    }
 
-            DateTime tomorrow = DateTime.Today.AddDays(1);
+    // ------------------------------------------------------------------ cart commands
 
-            txtDeliveryDate.Attributes["min"] = tomorrow.ToString("yyyy-MM-dd");
-            txtDeliveryDate.Attributes["max"] = DateTime.Today.AddDays(30).ToString("yyyy-MM-dd");
+    /// <summary>Update / remove a single flower row.</summary>
+    protected void rptItems_ItemCommand(object source, RepeaterCommandEventArgs e)
+    {
+        int cartId;
+        if (!int.TryParse(Convert.ToString(e.CommandArgument), out cartId)) return;
+        int userId = AuthHelper.CurrentUserId;
 
-            if (!IsPostBack)
+        try
+        {
+            if (e.CommandName == "update")
             {
-                LoadCart();
-                PrefillCustomer();
+                TextBox txt = (TextBox)e.Item.FindControl("txtQty");
+                int qty;
+                if (!int.TryParse(txt.Text, out qty) || qty < 1 || qty > CartService.MaxQty)
+                {
+                    ShowMessage("Please enter a quantity between 1 and " + CartService.MaxQty + ".", true);
+                }
+                else if (CartService.UpdateQuantity(userId, cartId, qty))
+                {
+                    ShowMessage("Quantity updated.", false);
+                }
+            }
+            else if (e.CommandName == "remove")
+            {
+                CartService.RemoveItem(userId, cartId);
+                ShowMessage("Item removed from your cart.", false);
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorLog.Write(ex);
+            ShowMessage("Sorry, we could not update your cart. Please try again.", true);
+        }
+        BindCart();
+    }
 
-                if (Request.QueryString["added"] != null)
-                {
-                    ShowMessage("Your bouquet has been added to the bag.", true);
-                }
-                else if (Request.QueryString["updated"] == "1")
-                {
-                    ShowMessage("Your bag has been updated.", true);
-                }
-                else if (Request.QueryString["removed"] == "1")
-                {
-                    ShowMessage("The item has been removed from your bag.", true);
-                }
+    /// <summary>Remove a whole bouquet, or save a new wrapping / ribbon for it.</summary>
+    protected void rptGroups_ItemCommand(object source, RepeaterCommandEventArgs e)
+    {
+        Guid bouquetId;
+        if (!Guid.TryParse(Convert.ToString(e.CommandArgument), out bouquetId)) return;
+        int userId = AuthHelper.CurrentUserId;
 
-                if (string.IsNullOrWhiteSpace(txtDeliveryDate.Text))
+        try
+        {
+            if (e.CommandName == "removeBouquet")
+            {
+                CartService.RemoveBouquet(userId, bouquetId);
+                ShowMessage("Bouquet removed from your cart.", false);
+            }
+            else if (e.CommandName == "saveOptions")
+            {
+                DropDownList ddlWrap = (DropDownList)e.Item.FindControl("ddlWrap");
+                DropDownList ddlRibbon = (DropDownList)e.Item.FindControl("ddlRibbon");
+                int wrapId, ribbonId;
+                if (int.TryParse(ddlWrap.SelectedValue, out wrapId) && int.TryParse(ddlRibbon.SelectedValue, out ribbonId)
+                    && CartService.UpdateBouquetOptions(userId, bouquetId, wrapId, ribbonId))
                 {
-                    txtDeliveryDate.Text = tomorrow.ToString("yyyy-MM-dd");
+                    ShowMessage("Wrapping and ribbon updated.", false);
+                }
+                else
+                {
+                    ShowMessage("Please choose a valid wrapping and ribbon.", true);
                 }
             }
         }
-
-        private void LoadCart()
+        catch (Exception ex)
         {
-            try
-            {
-                int userId = Auth.CurrentUserId.Value;
-                CartSummary cart = CartService.GetCart(userId);
+            ErrorLog.Write(ex);
+            ShowMessage("Sorry, we could not update your cart. Please try again.", true);
+        }
+        BindCart();
+    }
 
-                rptCart.DataSource = cart.Lines;
-                rptCart.DataBind();
+    // ------------------------------------------------------------------ checkout
 
-                pnlEmpty.Visible = cart.Lines.Count == 0;
-                pnlCart.Visible = cart.Lines.Count > 0;
+    protected void btnPlaceOrder_Click(object sender, EventArgs e)
+    {
+        string name = (txtName.Text ?? "").Trim();
+        string phone = Validation.NormalizePhone(txtPhone.Text);
+        string address = (txtAddress.Text ?? "").Trim();
 
-                litHeroCount.Text = cart.ItemCount.ToString("00");
-                litItemCount.Text = cart.ItemCount + (cart.ItemCount == 1 ? " bouquet" : " bouquets");
-                litSubtotal.Text = cart.SubtotalText;
-                litDelivery.Text = cart.DeliveryFeeText;
-                litGrandTotal.Text = cart.GrandTotalText;
+        // ---- Server-side validation of every field ----
+        string problem = null;
+        DateTime date = DateTime.MinValue;
 
-                litDeliveryNote.Text = cart.HasFreeDelivery
-                    ? "Complimentary delivery has been applied to your order."
-                    : "Add " + cart.AmountToFreeDeliveryText + " more to unlock complimentary delivery.";
+        if (!Validation.IsValidName(name))
+            problem = "Please enter the customer's full name.";
+        else if (phone == null)
+            problem = "Please enter a valid 10-digit Indian mobile number.";
+        else if (!Validation.IsValidAddress(address))
+            problem = "Please enter the full delivery address (at least 10 characters).";
+        else if (!DateTime.TryParseExact((txtDate.Text ?? "").Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out date))
+            problem = "Please choose a delivery date.";
+        else if (date.Date < DateTime.Today.AddDays(1) || date.Date > DateTime.Today.AddDays(MaxDaysAhead))
+            problem = "Please choose a delivery date between tomorrow and " + MaxDaysAhead + " days from now.";
 
-                btnPlaceOrder.Enabled = cart.Lines.Count > 0 && !cart.HasInvalidLines;
-
-                if (cart.HasInvalidLines)
-                {
-                    ShowMessage(
-                        "Some items in your bag are no longer available. Remove them to continue to checkout.",
-                        false);
-                }
-            }
-            catch (Exception exception)
-            {
-                Logger.Log(exception);
-                pnlCart.Visible = false;
-                pnlEmpty.Visible = true;
-                btnPlaceOrder.Enabled = false;
-                ShowMessage(
-                    "Your bag could not be loaded. Please check the database connection and refresh the page.",
-                    false);
-            }
+        if (problem != null)
+        {
+            ShowMessage(problem, true);
+            BindCart();
+            return;
         }
 
-        private void PrefillCustomer()
+        // ---- Create the order in one SQL transaction (prices are recalculated from the database) ----
+        string error;
+        int orderId;
+        try
         {
-            try
-            {
-                UserRecord user = AccountService.GetUser(Auth.CurrentUserId.Value);
-
-                if (user != null)
-                {
-                    txtName.Text = user.FullName;
-                    txtPhone.Text = user.Phone;
-                }
-            }
-            catch (Exception exception)
-            {
-                // Pre-filling is a convenience; the customer can still type their details.
-                Logger.Log(exception);
-            }
+            orderId = OrderService.PlaceOrder(AuthHelper.CurrentUserId, name, phone, address, date, out error);
+        }
+        catch (Exception ex)
+        {
+            ErrorLog.Write(ex);
+            ShowMessage("We could not place your order right now. Please try again in a moment.", true);
+            BindCart();
+            return;
         }
 
-        /// <summary>
-        /// Reads the quantity inputs, validates them all first, then saves.
-        /// CartService filters by UserId, so only the customer's own lines change.
-        /// </summary>
-        private bool ApplyPostedQuantities(out string error)
+        if (orderId == 0)
         {
-            error = null;
-
-            int userId = Auth.CurrentUserId.Value;
-            CartSummary cart = CartService.GetCart(userId);
-            Dictionary<int, int> updates = new Dictionary<int, int>();
-
-            foreach (CartLine line in cart.Lines)
-            {
-                string raw = Request.Form["qty_" + line.CartId];
-
-                if (raw == null)
-                {
-                    continue;
-                }
-
-                int quantity;
-
-                if (!int.TryParse(raw, out quantity) || quantity < 1 || quantity > 99)
-                {
-                    error = "Each quantity must be a whole number between 1 and 99.";
-                    return false;
-                }
-
-                if (quantity != line.Quantity)
-                {
-                    updates[line.CartId] = quantity;
-                }
-            }
-
-            foreach (KeyValuePair<int, int> update in updates)
-            {
-                CartService.UpdateQuantity(userId, update.Key, update.Value);
-            }
-
-            return true;
+            ShowMessage(error, true);
+            BindCart();
+            return;
         }
 
-        protected void btnUpdateCart_Click(object sender, EventArgs e)
-        {
-            string error;
+        Response.Redirect("~/Pages/OrderConfirmation.aspx?id=" + orderId);
+    }
 
-            try
-            {
-                if (!ApplyPostedQuantities(out error))
-                {
-                    ShowMessage(error, false);
-                    LoadCart();
-                    return;
-                }
-
-                Response.Redirect("~/Pages/Cart.aspx?updated=1", false);
-                Context.ApplicationInstance.CompleteRequest();
-            }
-            catch (System.Threading.ThreadAbortException)
-            {
-                throw;
-            }
-            catch (Exception exception)
-            {
-                Logger.Log(exception);
-                ShowMessage("Your bag could not be updated. Please try again.", false);
-                LoadCart();
-            }
-        }
-
-        protected void rptCart_Remove(object sender, CommandEventArgs e)
-        {
-            int cartId;
-
-            if (!int.TryParse(Convert.ToString(e.CommandArgument), out cartId) || cartId <= 0)
-            {
-                ShowMessage("That item could not be removed. Please try again.", false);
-                return;
-            }
-
-            try
-            {
-                CartService.RemoveLine(Auth.CurrentUserId.Value, cartId);
-                Response.Redirect("~/Pages/Cart.aspx?removed=1", false);
-                Context.ApplicationInstance.CompleteRequest();
-            }
-            catch (System.Threading.ThreadAbortException)
-            {
-                throw;
-            }
-            catch (Exception exception)
-            {
-                Logger.Log(exception);
-                ShowMessage("That item could not be removed. Please try again.", false);
-            }
-        }
-
-        protected void btnPlaceOrder_Click(object sender, EventArgs e)
-        {
-            string error;
-
-            try
-            {
-                if (!ApplyPostedQuantities(out error))
-                {
-                    ShowCheckoutError(error);
-                    LoadCart();
-                    return;
-                }
-
-                DateTime deliveryDate;
-                string[] formats = new string[] { "yyyy-MM-dd", "dd-MM-yyyy", "dd/MM/yyyy", "yyyy/MM/dd", "MM/dd/yyyy" };
-
-                if (!DateTime.TryParseExact(
-                    txtDeliveryDate.Text,
-                    formats,
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.None,
-                    out deliveryDate) &&
-                    !DateTime.TryParse(txtDeliveryDate.Text, CultureInfo.InvariantCulture, DateTimeStyles.None, out deliveryDate))
-                {
-                    ShowCheckoutError("Please choose a valid preferred delivery date.");
-                    LoadCart();
-                    return;
-                }
-
-                int orderId = OrderService.PlaceOrder(
-                    Auth.CurrentUserId.Value,
-                    txtName.Text,
-                    txtPhone.Text,
-                    txtAddress.Text,
-                    deliveryDate,
-                    out error);
-
-                if (orderId <= 0)
-                {
-                    ShowCheckoutError(error ?? "Your order could not be placed. Please check your details.");
-                    LoadCart();
-                    return;
-                }
-
-                Response.Redirect("~/Pages/OrderConfirmation.aspx?orderId=" + orderId, false);
-                Context.ApplicationInstance.CompleteRequest();
-            }
-            catch (System.Threading.ThreadAbortException)
-            {
-                throw;
-            }
-            catch (Exception exception)
-            {
-                Logger.Log(exception);
-                ShowCheckoutError(
-                    "We could not place your order right now. No payment has been taken. Please try again.");
-            }
-        }
-
-        private void ShowMessage(string message, bool success)
-        {
-            pnlMessage.Visible = true;
-            pnlMessage.CssClass = success ? "alert alert-success" : "alert alert-error";
-            litMessage.Text = Server.HtmlEncode(message);
-        }
-
-        private void ShowCheckoutError(string message)
-        {
-            pnlCheckoutError.Visible = true;
-            litCheckoutError.Text = Server.HtmlEncode(message);
-        }
+    private void ShowMessage(string message, bool isError)
+    {
+        litMessage.Text = HttpUtility.HtmlEncode(message);
+        pnlMessage.CssClass = isError ? "alert alert-error" : "alert alert-success";
+        pnlMessage.Visible = true;
     }
 }

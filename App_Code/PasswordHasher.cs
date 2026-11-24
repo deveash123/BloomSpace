@@ -4,102 +4,71 @@ using System.Security.Cryptography;
 namespace BloomSpace
 {
     /// <summary>
-    /// Salted PBKDF2-SHA256 password hashing.
-    /// A different random salt is created for every account, so two users
-    /// with the same password never produce the same stored hash.
+    /// Salted PBKDF2 (HMAC-SHA256) password hashing.
+    /// Each password gets its own random 16-byte salt; the hash and salt are stored as Base64 text.
     /// </summary>
     public static class PasswordHasher
     {
-        public const int SaltSize = 16;       // 128-bit salt
-        public const int HashSize = 32;       // 256-bit derived key
+        private const int SaltSize = 16;
+        private const int HashSize = 32;
         public const int DefaultIterations = 100000;
 
-        public static void CreateHash(
-            string password,
-            out string hashBase64,
-            out string saltBase64,
-            out int iterations)
+        /// <summary>Creates a new salt and returns the hash for the given password.</summary>
+        public static void Hash(string password, out string hashBase64, out string saltBase64, out int iterations)
         {
-            if (string.IsNullOrEmpty(password))
-            {
-                throw new ArgumentException("Password cannot be empty.", "password");
-            }
-
-            iterations = DefaultIterations;
-
             byte[] salt = new byte[SaltSize];
-
-            using (RandomNumberGenerator generator = RandomNumberGenerator.Create())
+            using (RandomNumberGenerator rng = RandomNumberGenerator.Create())
             {
-                generator.GetBytes(salt);
+                rng.GetBytes(salt);
             }
-
+            iterations = DefaultIterations;
             byte[] hash = Derive(password, salt, iterations);
-
             hashBase64 = Convert.ToBase64String(hash);
             saltBase64 = Convert.ToBase64String(salt);
         }
 
-        public static bool Verify(
-            string password,
-            string hashBase64,
-            string saltBase64,
-            int iterations)
+        /// <summary>Checks a password against a stored hash using a constant-time comparison.</summary>
+        public static bool Verify(string password, string storedHashBase64, string storedSaltBase64, int iterations)
         {
-            if (string.IsNullOrEmpty(password) ||
-                string.IsNullOrEmpty(hashBase64) ||
-                string.IsNullOrEmpty(saltBase64) ||
-                iterations <= 0)
-            {
-                return false;
-            }
-
-            byte[] expected;
-            byte[] salt;
-
             try
             {
-                expected = Convert.FromBase64String(hashBase64);
-                salt = Convert.FromBase64String(saltBase64);
+                byte[] salt = Convert.FromBase64String(storedSaltBase64);
+                byte[] expected = Convert.FromBase64String(storedHashBase64);
+                byte[] actual = Derive(password, salt, iterations);
+                return FixedTimeEquals(expected, actual);
             }
             catch (FormatException)
             {
                 return false;
             }
+        }
 
-            byte[] actual = Derive(password, salt, iterations);
-
-            return FixedTimeEquals(actual, expected);
+        /// <summary>
+        /// Does the same amount of work as a real check. Called when the email is unknown so
+        /// attackers cannot tell "no such account" from "wrong password" by response time.
+        /// </summary>
+        public static void BurnTime(string password)
+        {
+            Derive(password, new byte[SaltSize], DefaultIterations);
         }
 
         private static byte[] Derive(string password, byte[] salt, int iterations)
         {
-            using (Rfc2898DeriveBytes pbkdf2 = new Rfc2898DeriveBytes(
-                password,
-                salt,
-                iterations,
-                HashAlgorithmName.SHA256))
+            using (Rfc2898DeriveBytes pbkdf2 = new Rfc2898DeriveBytes(password, salt, iterations, HashAlgorithmName.SHA256))
             {
                 return pbkdf2.GetBytes(HashSize);
             }
         }
 
-        /// <summary>Constant-time comparison avoids leaking information by timing.</summary>
-        private static bool FixedTimeEquals(byte[] left, byte[] right)
+        private static bool FixedTimeEquals(byte[] a, byte[] b)
         {
-            if (left == null || right == null || left.Length != right.Length)
+            if (a == null || b == null || a.Length != b.Length) return false;
+            int diff = 0;
+            for (int i = 0; i < a.Length; i++)
             {
-                return false;
+                diff |= a[i] ^ b[i];
             }
-
-            int difference = 0;
-
-            for (int i = 0; i < left.Length; i++)
-            {
-                difference |= left[i] ^ right[i];
-            }
-
-            return difference == 0;
+            return diff == 0;
         }
     }
 }

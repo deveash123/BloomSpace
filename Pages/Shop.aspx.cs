@@ -1,120 +1,107 @@
 using System;
-using System.Collections.Generic;
+using System.Data;
 using System.Web;
-using System.Web.UI;
 using System.Web.UI.WebControls;
+using BloomSpace;
 
-namespace BloomSpace.Pages
+public partial class Pages_Shop : System.Web.UI.Page
 {
-    public partial class ShopPage : BloomPage
+    private static readonly string[] Categories = { "Roses", "Tulips", "Lilies", "Sunflowers" };
+
+    /// <summary>The category from ?category=... (only the four known names are accepted), or null for "All".</summary>
+    private string CurrentCategory
     {
-        private string CurrentCategory
+        get
         {
-            get { return (Request.QueryString["category"] ?? string.Empty).Trim(); }
+            string c = Request.QueryString["category"];
+            return (c != null && Array.IndexOf(Categories, c) >= 0) ? c : null;
+        }
+    }
+
+    protected void Page_Load(object sender, EventArgs e)
+    {
+        if (IsPostBack) return;
+
+        if (Request.QueryString["added"] == "1")
+        {
+            ShowMessage("Added to your cart. <a href=\"" + HttpUtility.HtmlAttributeEncode(ResolveUrl("~/Pages/Cart.aspx")) + "\">View cart</a>", false);
+        }
+        else if (Request.QueryString["error"] == "1")
+        {
+            ShowMessage("Sorry, that flower could not be added. Please try again.", true);
         }
 
-        protected void Page_Load(object sender, EventArgs e)
+        BindProducts();
+    }
+
+    private void BindProducts()
+    {
+        try
         {
-            if (!IsPostBack)
+            string cat = CurrentCategory;
+            DataTable dt;
+            if (cat == null)
             {
-                LoadProducts();
-
-                if (Request.QueryString["added"] == "1")
-                {
-                    ShowMessage("Your bouquet has been added to the bag.", true);
-                }
+                dt = Db.Table(@"SELECT FlowerId, Name, Category, Description, UnitPrice, ImageUrl
+                                FROM dbo.Flowers WHERE IsActive = 1 ORDER BY Category, Name");
             }
-        }
+            else
+            {
+                dt = Db.Table(@"SELECT FlowerId, Name, Category, Description, UnitPrice, ImageUrl
+                                FROM dbo.Flowers WHERE IsActive = 1 AND Category = @c ORDER BY Name",
+                              Db.P("@c", cat));
+            }
 
-        private void LoadProducts()
+            rptProducts.DataSource = dt;
+            rptProducts.DataBind();
+            pnlProducts.Visible = dt.Rows.Count > 0;
+            pnlEmpty.Visible = dt.Rows.Count == 0;
+        }
+        catch (Exception ex)
+        {
+            ErrorLog.Write(ex);
+            pnlProducts.Visible = false;
+            pnlEmpty.Visible = false;
+            ShowMessage("Sorry, we could not load the flowers right now. Please try again shortly.", true);
+        }
+    }
+
+    protected void rptProducts_ItemCommand(object source, RepeaterCommandEventArgs e)
+    {
+        if (e.CommandName != "add") return;
+
+        // Only logged-in customers have a cart; guests are sent to log in and then brought back here.
+        AuthHelper.RequireLogin(this);
+
+        int flowerId;
+        bool ok = false;
+        if (int.TryParse(Convert.ToString(e.CommandArgument), out flowerId))
         {
             try
             {
-                List<FlowerProduct> products = CartService.GetShopFlowers(CurrentCategory);
-
-                rptProducts.DataSource = products;
-                rptProducts.DataBind();
-
-                pnlEmpty.Visible = products.Count == 0;
-                litCategoryLabel.Text = string.IsNullOrWhiteSpace(CurrentCategory)
-                    ? "All flowers"
-                    : CurrentCategory;
-
-                litResultCount.Text = products.Count.ToString("00") +
-                    (products.Count == 1 ? " bouquet" : " bouquets");
+                ok = CartService.AddSingle(AuthHelper.CurrentUserId, flowerId, 1);
             }
-            catch (Exception exception)
+            catch (Exception ex)
             {
-                Logger.Log(exception);
-                pnlEmpty.Visible = false;
-                ShowMessage(
-                    "The collection could not be loaded. Please check the database connection and refresh the page.",
-                    false);
+                ErrorLog.Write(ex);
             }
         }
 
-        protected string FilterClass(string category)
-        {
-            bool isAll = string.IsNullOrWhiteSpace(CurrentCategory) && string.IsNullOrWhiteSpace(category);
-            bool isMatch = !string.IsNullOrWhiteSpace(category) &&
-                string.Equals(CurrentCategory, category, StringComparison.OrdinalIgnoreCase);
+        string cat = CurrentCategory;
+        string url = "~/Pages/Shop.aspx?" + (cat != null ? "category=" + cat + "&" : "") + (ok ? "added=1" : "error=1");
+        Response.Redirect(url);
+    }
 
-            return isAll || isMatch ? "filter-btn active" : "filter-btn";
-        }
+    private void ShowMessage(string html, bool isError)
+    {
+        litMessage.Text = isError ? HttpUtility.HtmlEncode(html) : html;   // html is built by this file only
+        pnlMessage.CssClass = isError ? "alert alert-error" : "alert alert-success";
+        pnlMessage.Visible = true;
+    }
 
-        protected void rptProducts_Add(object sender, CommandEventArgs e)
-        {
-            if (!Auth.RequireLogin(this))
-            {
-                return;
-            }
-
-            int flowerId;
-
-            if (!int.TryParse(Convert.ToString(e.CommandArgument), out flowerId) || flowerId <= 0)
-            {
-                ShowMessage("That bouquet could not be added. Please try again.", false);
-                return;
-            }
-
-            try
-            {
-                CartService.AddFlower(Auth.CurrentUserId.Value, flowerId, 1);
-
-                string url = ResolveUrl("~/Pages/Shop.aspx") + "?added=1";
-
-                if (!string.IsNullOrWhiteSpace(CurrentCategory))
-                {
-                    url += "&category=" + HttpUtility.UrlEncode(CurrentCategory);
-                }
-
-                Response.Redirect(url, false);
-                Context.ApplicationInstance.CompleteRequest();
-            }
-            catch (System.Threading.ThreadAbortException)
-            {
-                throw;
-            }
-            catch (ArgumentException exception)
-            {
-                ShowMessage(exception.Message, false);
-            }
-            catch (InvalidOperationException exception)
-            {
-                ShowMessage(exception.Message, false);
-            }
-            catch (Exception exception)
-            {
-                Logger.Log(exception);
-                ShowMessage("We could not add that bouquet right now. Please try again.", false);
-            }
-        }
-
-        private void ShowMessage(string message, bool success)
-        {
-            pnlMessage.Visible = true;
-            pnlMessage.CssClass = success ? "alert alert-success" : "alert alert-error";
-            litMessage.Text = Server.HtmlEncode(message);
-        }
+    /// <summary>Returns "active" for the filter pill that matches the current category.</summary>
+    protected string Tab(string category)
+    {
+        return string.Equals(CurrentCategory, category, StringComparison.Ordinal) ? "active" : "";
     }
 }

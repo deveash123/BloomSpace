@@ -1,101 +1,73 @@
 using System;
+using System.Data;
 using System.Web;
-using System.Web.UI;
+using BloomSpace;
 
-namespace BloomSpace.Account
+public partial class Account_Login : System.Web.UI.Page
 {
-    public partial class LoginPage : BloomPage
+    protected void Page_Load(object sender, EventArgs e)
     {
-        public string RegisterUrl
+        // Already logged in? No need to see the login form.
+        if (!IsPostBack && AuthHelper.IsLoggedIn)
         {
-            get
-            {
-                string url = ResolveUrl("~/Account/Register.aspx");
-                string returnUrl = Request.QueryString["returnUrl"];
+            Response.Redirect(GetReturnUrl());
+        }
+    }
 
-                if (!string.IsNullOrWhiteSpace(returnUrl))
-                {
-                    url += "?returnUrl=" + HttpUtility.UrlEncode(returnUrl);
-                }
+    protected void btnLogin_Click(object sender, EventArgs e)
+    {
+        string email = (txtEmail.Text ?? "").Trim().ToLowerInvariant();
+        string password = txtPassword.Text ?? "";
 
-                return url;
-            }
+        if (!Validation.IsValidEmail(email) || password.Length == 0)
+        {
+            ShowError("Please enter your email address and password.");
+            return;
         }
 
-        protected void Page_Load(object sender, EventArgs e)
+        try
         {
-            if (Auth.IsLoggedIn)
+            DataTable dt = Db.Table(
+                "SELECT UserId, FullName, PasswordHash, PasswordSalt, Iterations FROM dbo.Users WHERE Email = @e",
+                Db.P("@e", email));
+
+            bool ok = false;
+            if (dt.Rows.Count == 1)
             {
-                Response.Redirect("~/Pages/Home.aspx", false);
-                Context.ApplicationInstance.CompleteRequest();
-                return;
-            }
-
-            if (!IsPostBack && Request.QueryString["registered"] == "1")
-            {
-                ShowInfo("Your account has been created. Please sign in to continue.");
-            }
-        }
-
-        protected void btnLogin_Click(object sender, EventArgs e)
-        {
-            string email = (txtEmail.Text ?? string.Empty).Trim();
-            string password = txtPassword.Text ?? string.Empty;
-
-            if (!Validation.IsValidEmail(email))
-            {
-                ShowError("Please enter a valid email address.");
-                return;
-            }
-
-            if (string.IsNullOrEmpty(password))
-            {
-                ShowError("Please enter your password.");
-                return;
-            }
-
-            try
-            {
-                UserRecord user = AccountService.Authenticate(email, password);
-
-                if (user == null)
+                DataRow row = dt.Rows[0];
+                ok = PasswordHasher.Verify(password, (string)row["PasswordHash"], (string)row["PasswordSalt"], (int)row["Iterations"]);
+                if (ok)
                 {
-                    // Deliberately generic: do not reveal whether the email exists.
-                    ShowError("Email or password is incorrect. Please try again.");
-                    txtPassword.Text = string.Empty;
+                    AuthHelper.SignIn((int)row["UserId"], (string)row["FullName"]);
+                    Response.Redirect(GetReturnUrl(), false);
+                    Context.ApplicationInstance.CompleteRequest();
                     return;
                 }
-
-                Auth.SignIn(user.UserId, user.FullName, user.Email);
-
-                string returnUrl = Auth.SafeReturnUrl(
-                    Request.QueryString["returnUrl"],
-                    "~/Pages/Home.aspx");
-
-                Response.Redirect(returnUrl, false);
-                Context.ApplicationInstance.CompleteRequest();
             }
-            catch (System.Threading.ThreadAbortException)
+            else
             {
-                throw;
+                // Unknown email: do the same amount of work so timing does not reveal which emails exist.
+                PasswordHasher.BurnTime(password);
             }
-            catch (Exception exception)
-            {
-                Logger.Log(exception);
-                ShowError("We could not sign you in right now. Please try again.");
-            }
-        }
 
-        private void ShowError(string message)
-        {
-            pnlError.Visible = true;
-            litError.Text = Server.HtmlEncode(message);
+            // Same message for "no such email" and "wrong password".
+            ShowError("The email or password you entered is not correct. Please try again.");
         }
+        catch (Exception ex)
+        {
+            ErrorLog.Write(ex);
+            ShowError("Sorry, we could not log you in right now. Please try again in a moment.");
+        }
+    }
 
-        private void ShowInfo(string message)
-        {
-            pnlInfo.Visible = true;
-            litInfo.Text = Server.HtmlEncode(message);
-        }
+    private string GetReturnUrl()
+    {
+        return AuthHelper.SafeReturnUrl(Request.QueryString["returnUrl"], ResolveUrl("~/Pages/Home.aspx"));
+    }
+
+    private void ShowError(string message)
+    {
+        litMessage.Text = HttpUtility.HtmlEncode(message);
+        pnlMessage.Visible = true;
     }
 }

@@ -1,115 +1,58 @@
-<%@ Page Title="Our Story | Bloom Space" Language="C#" MasterPageFile="~/Site.Master" %>
+<%@ Page Title="About Us" Language="C#" MasterPageFile="~/Site.Master" AutoEventWireup="true" CodeFile="About.aspx.cs" Inherits="Pages_About" %>
 
-<asp:Content ID="MainContent" ContentPlaceHolderID="MainContent" runat="server">
+<asp:Content ID="Content1" ContentPlaceHolderID="MainContent" runat="server">
 
     <section class="page-hero">
-        <div class="container page-hero-inner">
-            <div>
-                <span class="eyebrow">Our story</span>
-                <h1>Flowers, with a little <em>more meaning.</em></h1>
-                <p>
-                    Bloom Space began with a simple belief: a bouquet should feel like
-                    it was made for one person, on one day, for one reason.
-                </p>
-            </div>
-            <div class="page-hero-aside">
-                <span class="page-hero-number">2026</span>
-                <span class="page-hero-label">Hand-tied<br />in Chennai</span>
-            </div>
-        </div>
-    </section>
-
-    <section class="section story-split-section">
-        <div class="container story-split">
-            <div class="story-media">
-                <img src="<%= ResolveUrl("~/Images/Flowers/custom-bouquet.svg") %>" alt="A hand-tied Bloom Space bouquet in kraft paper" loading="lazy" />
-                <span class="story-media-caption">01 &mdash; The studio, Anna Nagar</span>
-            </div>
-
-            <div class="story-copy">
-                <span class="eyebrow">Where it began</span>
-                <h2>A small studio,<br /><em>a large idea.</em></h2>
-                <p>
-                    Bloom Space started as a corner of a Chennai flower market, a pair of
-                    scissors and a notebook of colour combinations. We wanted to make
-                    flowers feel less like a last-minute purchase and more like a
-                    considered gesture.
-                </p>
-                <p>
-                    Today, every bouquet is still tied by hand. We work in small batches,
-                    choose stems that are in season, and wrap each arrangement in paper
-                    we would be happy to give someone ourselves.
-                </p>
-                <div class="story-signature">
-                    <span class="signature-line" aria-hidden="true"></span>
-                    <span>The Bloom Space florists</span>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <section class="section mission-section">
-        <div class="container mission-inner">
-            <span class="eyebrow">Our mission</span>
-            <h2>To make giving flowers feel <em>personal again.</em></h2>
-            <p>
-                We believe the best bouquets are not the biggest ones. They are the ones
-                that notice a favourite colour, a remembered flower, a quiet inside joke.
-                That is why we offer a signature collection for the moments that need
-                no explanation, and a custom studio for the ones that do.
-            </p>
-        </div>
-    </section>
-
-    <section class="section values-section">
         <div class="container">
-            <div class="section-heading">
-                <div>
-                    <span class="eyebrow">What we care about</span>
-                    <h2>Three things, <em>always.</em></h2>
-                </div>
-            </div>
+            <span class="eyebrow">About Bloom Space</span>
+            <h1>Every Bloom Tells a Story.</h1>
+            <p>A small floral boutique built on the belief that flowers are the most honest way to say what we feel.</p>
+        </div>
+    </section>
 
-            <div class="values-grid">
-                <article class="value-card">
-                    <span class="value-number">01</span>
-                    <h3>Thoughtful sourcing</h3>
-                    <p>We buy in small batches from growers we know, choosing stems for scent, texture and the way they open over time.</p>
-                </article>
-                <article class="value-card">
-                    <span class="value-number">02</span>
-                    <h3>Hand-tied artistry</h3>
-                    <p>No two bouquets leave the studio looking exactly the same. Each one is arranged by hand, with an eye for balance and movement.</p>
-                </article>
-                <article class="value-card">
-                    <span class="value-number">03</span>
-                    <h3>Delivered with care</h3>
-                    <p>Our couriers carry every order upright, cushioned and on time, because the journey matters as much as the arrival.</p>
-                </article>
+    <section class="section">
+        <div class="container split">
+            <div>
+                <img src="<%= ResolveUrl("~/Images/Flowers/story-flowers.jpg") %>" alt="Flowers arranged on a table" loading="lazy" />
+            </div>
+            <div class="split-text">
+                <span class="eyebrow">Our story</span>
+                <h2>Where It All Began</h2>
+                <p>Bloom Space started as a love for the small rituals around flowers: choosing stems at the market, trimming them, and tying them with a ribbon for someone special.</p>
+                <p>We wanted everyone to enjoy that same joy online. So instead of fixed arrangements, we built a space where you design the bouquet yourself, from the first rose to the final bow.</p>
             </div>
         </div>
     </section>
 
-    <section class="section quote-section">
-        <div class="container quote-inner">
-            <span class="quote-mark" aria-hidden="true">&ldquo;</span>
-            <blockquote>
-                Every bloom tells a story. Our job is simply to help you tell yours.
-            </blockquote>
-            <span class="quote-credit">The Bloom Space studio</span>
+    <section class="section bg-blush">
+        <div class="container">
+            <div class="section-head">
+                <span class="eyebrow">Our mission</span>
+                <h2>Make Every Gift Personal</h2>
+                <p>Our mission is to make thoughtful, beautiful flowers easy to give &mdash; fresh, fairly priced, and as unique as the person receiving them.</p>
+            </div>
+            <div class="values-grid">
+                <div class="value-card">
+                    <h3>Freshness First</h3>
+                    <p>Flowers are arranged close to delivery so they arrive at their best and last longer.</p>
+                </div>
+                <div class="value-card">
+                    <h3>Thoughtful Design</h3>
+                    <p>From paper to ribbon, every detail is chosen to look elegant and feel considered.</p>
+                </div>
+                <div class="value-card">
+                    <h3>Honest Pricing</h3>
+                    <p>Clear per-stem prices and one flat delivery fee. What you see is what you pay.</p>
+                </div>
+            </div>
         </div>
     </section>
 
     <section class="cta-band">
-        <div class="container cta-band-inner">
-            <div>
-                <span class="eyebrow">Find your flowers</span>
-                <h2>Ready to send something <em>beautiful?</em></h2>
-            </div>
-            <div class="cta-band-actions">
-                <a class="btn btn-light" href="<%= ResolveUrl("~/Pages/Shop.aspx") %>">Shop the collection</a>
-                <a class="btn btn-outline-light" href="<%= ResolveUrl("~/Pages/CustomBouquet.aspx") %>">Design your own</a>
-            </div>
+        <div class="container">
+            <h2>Start Your Story</h2>
+            <p>Pick your favourite blooms or build a bouquet from scratch.</p>
+            <a class="btn btn-light" href="<%= ResolveUrl("~/Pages/CustomBouquet.aspx") %>">Design Your Bouquet</a>
         </div>
     </section>
 
